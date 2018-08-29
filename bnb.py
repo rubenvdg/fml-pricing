@@ -353,8 +353,8 @@ class BranchAndBound:
             rev_ub = np.max([cube.rev_ub for cube in self.cubes])
             opt_gap = 1 - self.rev_lb / rev_ub
 
-            if opt_gap > self.epsilon:
-                self.exit_msg = "Exit because optimality gap is max epsilon."
+            if opt_gap < self.epsilon:
+                self.exit_msg = "Exit because optimality gap < epsilon."
                 stop = True
             elif self.iter == self.max_iter:
                 self.exit_msg = (f"Exit because maxiter reached, " +
