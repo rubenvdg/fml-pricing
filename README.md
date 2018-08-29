@@ -1,6 +1,6 @@
 # Price Optimization under the Finite-Mixture Logit model
 
-The file bnb.py contains the implementation of the branch-and-bound algorithm described in our paper "Price Optimization under the Finite-Mixture Logit Model" (https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3235432).
+This repository contains the implementation of the branch-and-bound algorithm described in our paper "Price Optimization under the Finite-Mixture Logit Model" (https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3235432).
 
 The code is developed and tested under:
 + Python 3.6.5
