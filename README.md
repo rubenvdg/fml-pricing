@@ -8,4 +8,4 @@ The code is developed and tested under:
 + SciPy 1.1.0
 + CVXOPT 1.2.0
 
-The algorithm is contained in `bnb.py` (an example of an instantiation of the algorithm can be found at the bottom of the file).
+The algorithm is contained in `bnb.py`. An example of an instantiation of the algorithm can be found at the bottom of this file. 
