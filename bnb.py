@@ -70,6 +70,7 @@ class BranchAndBound:
         self.timer = None
         self.removed_cubes = []
 
+        # self.omega = {-1, 1}^m
         self.omega = np.vstack(
             map(np.ravel, np.meshgrid(*([[-1, 1] for _ in range(self.m)])))
         ).T
@@ -83,21 +84,9 @@ class BranchAndBound:
         self.E = np.asarray([np.exp(segment.a) for segment in self.segments]).T
         self.k = self.E * self.w.reshape(1, -1) / self.b.reshape(-1, 1)
 
-        self.xlog = {'cubes': [],
-                     'cubes_to_plot': [],
-                     'cube_count': [],
-                     'rev_lb': [],
-                     'opt_gap': []}
-
     @staticmethod
     def pi_c(pi, segment, b):
         return pi - np.sum(1 / b * np.exp(segment.a - 1 - b * pi))
-
-    @staticmethod
-    def rev(p, segments):
-        return - np.sum([c.share * np.sum(p * np.exp(c.a - c.b * p)) /
-                         (1 + np.sum(np.exp(c.a - c.b * p)))
-                         for c in segments])
 
     @staticmethod
     def D(theta, E, u, m, n, z_lb, z_ub, kx):
