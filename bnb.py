@@ -262,8 +262,7 @@ class BranchAndBound:
 
             cubes = [
                 Cube(cube.center + omega * self.radius,
-                     self.radius,
-                     theta_start=cube.theta_start)
+                     self.radius, theta_start=cube.theta_start)
                 for omega in self.omega for cube in cubes
             ]
 
