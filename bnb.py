@@ -338,13 +338,10 @@ class BranchAndBound:
 
             if self.m > 2:
                 with Pool() as pool:
-                    self.cubes = [cube for cubes in
-                                  pool.map(
+                    self.cubes = [cube for cubes in pool.map(
                                     self.iterate_cubes,
-                                    np.array_split(self.cubes,
-                                                   pool._processes)
-                                    )
-                                  for cube in cubes]
+                                    np.array_split(self.cubes, pool._processes)
+                                  ) for cube in cubes]
             else:
                 self.cubes = self.iterate_cubes(self.cubes)
 
@@ -354,21 +351,21 @@ class BranchAndBound:
                 [np.max([cube.D for cube in self.cubes]), self.rev_lb]
             )
             rev_ub = np.max([cube.rev_ub for cube in self.cubes])
-            opt_gap = self.rev_lb / rev_ub
+            opt_gap = 1 - self.rev_lb / rev_ub
 
-            if opt_gap > (1 - self.epsilon):
+            if opt_gap > self.epsilon:
                 self.exit_msg = "Exit because optimality gap is max epsilon."
                 stop = True
             elif self.iter == self.max_iter:
                 self.exit_msg = (f"Exit because maxiter reached, " +
-                                 f"current optimality gap: {1-opt_gap}.")
+                                 f"current optimality gap: {opt_gap:.4f}.")
                 stop = True
             else:
                 self.radius *= 0.5
 
             print(f"iteration: {self.iter}, " +
                   f"cube count before branching: {len(self.cubes)}, " +
-                  f"opt_gap: {1-opt_gap:.4f}, rev_lb: {self.rev_lb:.4f}")
+                  f"opt_gap: {opt_gap:.4f}, rev_lb: {self.rev_lb:.4f}")
 
         self.timer = time.time() - t0
 
