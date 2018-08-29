@@ -29,7 +29,6 @@ class Cube:
         self.feasible = False
         self.remove = False
         self.center = center
-        self.bottomcorner = center - radius
         self.radius = radius
         self.theta_start = theta_start
         self.x_delta = None
@@ -68,7 +67,6 @@ class BranchAndBound:
 
         self.radius = None
         self.timer = None
-        self.removed_cubes = []
 
         # self.omega = {-1, 1}^m
         self.omega = np.vstack(
@@ -201,6 +199,7 @@ class BranchAndBound:
                           options={'glpk': {'msg_lev': 'GLP_MSG_OFF'}})
 
     def dDdx_norm_ub(self, cube, nu_lb, nu_ub, lam):
+        ''' Compute L(x,r) defined in the accompanying paper '''
 
         E = self.E
         x = cube.center
@@ -272,7 +271,7 @@ class BranchAndBound:
 
             # remove cubes that are completely outside [x_lb, x_ub]
 
-            if np.any(cube.bottomcorner > self.x_ub):
+            if np.any(cube.center - cube.radius > self.x_ub):
                 cube.remove = True
 
             # check if feasible for the other cubes
