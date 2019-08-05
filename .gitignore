@@ -1,0 +1,6 @@
+*.csv
+*.pdf
+.vscode/
+.DS_Store
+.pynb_checkpoints/
+.python-version
