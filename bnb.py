@@ -8,11 +8,16 @@ from multiprocessing import Pool
 solvers.options['show_progress'] = False
 
 
+class Problem:
+    """Represents an instance of the FML pricing problem"""
+    pass
+
+
 class Segment:
     ''' Represents a customer segment  '''
 
-    def __init__(self, a_range, b, n, share):
-        self.a = np.random.uniform(a_range[0], a_range[1], size=n)
+    def __init__(self, a, b, n, share):
+        self.a = a
         self.b = b
         self.share = share
 
@@ -49,31 +54,21 @@ class BranchAndBound:
     def __init__(self, n, m, seed, max_iter, a_range, b_range, epsilon):
 
         self.iter = 0
-        self.n = n
-        self.m = m
-        self.seed = seed
         self.max_iter = max_iter
-        self.a_range = a_range
-        self.b_range = b_range
+        self.seed = seed
         self.epsilon = epsilon
 
         if self.seed:
             np.random.seed(self.seed)
 
-        self.w = np.random.uniform(0, 1, size=m)
-        self.w /= np.sum(self.w)
-        self.b = np.random.uniform(b_range[0], b_range[1], size=n)
-        self.segments = [Segment(a_range, self.b, n, wc) for wc in self.w]
-
         self.radius = None
-        self.timer = None
-
+        self.timer = None        
+        
         # self.omega = {-1, 1}^m
         self.omega = np.vstack(
             map(np.ravel, np.meshgrid(*([[-1, 1] for _ in range(self.m)])))
         ).T
 
-        self.compute_bounds_p_x()
         self.z_lb = np.exp(-self.p_ub * self.b)
         self.z_ub = np.exp(-self.p_lb * self.b)
         self.x_ub = np.asarray([segment.x_ub for segment in self.segments])
@@ -81,6 +76,16 @@ class BranchAndBound:
         self.radius = np.max(self.x_ub - self.x_lb) / 2
         self.E = np.asarray([np.exp(segment.a) for segment in self.segments]).T
         self.k = self.E * self.w.reshape(1, -1) / self.b.reshape(-1, 1)
+
+        self.n = n
+        self.m = m        
+        self.w = np.random.uniform(0, 1, size=m)
+        self.w /= np.sum(self.w)
+        self.b = np.random.uniform(*b_range, size=n)
+        a = [np.random.uniform(*a_range, size=n) for _ in self.m]
+        self.segments = [Segment(_a, self.b, n, _w) for _a, _w in zip(a, self.w)]
+        self.compute_bounds_p_x()
+
 
     @staticmethod
     def pi_c(pi, segment, b):
