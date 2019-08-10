@@ -46,7 +46,7 @@ mod = 'q'
 # Tolerance
 tol = 1e-2
 
-# f
+
 n = 2
 m = 2
 # alpha = np.random.uniform(1, 5, size=(m,n))
