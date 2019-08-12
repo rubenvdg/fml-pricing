@@ -1,5 +1,52 @@
+import numdifftools as nd
 import numpy as np
-from bnb.naive_optimizer import get_lhs_vee, get_p_r, get_q
+
+from bnb.problem import Problem
+from bnb.naive_optimizer import (
+    get_lhs_vee,
+    get_p_r,
+    get_q,
+    get_lipschitz_constant,
+    _get_lipschitz_constant
+)
+
+
+def test_get_lipschitz_constant():
+    m = 2
+    n = 3
+    a_range = (-4.0, 4.0)
+    b_range = (0.001, 0.01)
+    seed = 1
+    problem = Problem(n, m, a_range, b_range, seed)
+    p = np.asarray([2, 3, 4])
+    radius = 0.5
+    lipschitz_constant = get_lipschitz_constant(p, radius, problem)
+
+    p_samples = np.random.uniform(p - radius, p + radius, size=(1000, len(p)))
+    grad = nd.Gradient(problem.revenue)
+    lipschitz_constant_estimate = np.max(np.asarray([
+        np.abs(grad(p_sample)) for p_sample in p_samples
+    ]))
+
+    assert lipschitz_constant > lipschitz_constant_estimate
+
+
+def test__get_lipschitz_constant():
+    
+    lhs_vee = np.asarray([
+        [0, 0, 1],
+        [0, 0, 0]
+    ])
+    rhs_vee = - lhs_vee
+    q_ub_r = np.asarray([
+        [0.1, 0.5, 0.2],
+        [0.1, 0.4, 0.9]
+    ])
+    b = np.asarray([0, 0, 1])
+    w = np.asarray([0.2, 0.8])
+    L = _get_lipschitz_constant(lhs_vee, rhs_vee, q_ub_r, b, w)
+    expectedL = w[0] * q_ub_r[0, 2]
+    np.testing.assert_allclose(L, expectedL)
 
 
 def test_get_q():

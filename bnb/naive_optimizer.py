@@ -1,7 +1,33 @@
 import numpy as np
 
+def get_lipschitz_constant(p, radius, problem):
+    A, b, w = problem.A, problem.b, problem.w
+    p_lb_r, p_ub_r = get_p_r(p, radius)
+    q_lb_r = get_q(p_lb_r, A, b)
+    q_ub_r = get_q(p_ub_r, A, b)
+    p_ub_local = p + radius
+    rhs_vee = p_ub_local * (1 - q_lb_r)
+    lhs_vee = get_lhs_vee(q_ub_r, p_ub_local, b)
+    return _get_lipschitz_constant(lhs_vee, rhs_vee, q_ub_r, b, w)
 
-def get_lhs_vee(q, p, b):
+
+def get_lhs_vee(q: np.ndarray, p: np.ndarray, b: np.ndarray) -> np.ndarray:
+    """Get the lefthandside of the vee operator
+    
+    Parameters
+    ----------
+    q : np.ndarray
+        Array with probabilities of dimension (m, n). 
+    p : np.ndarray
+        Array with prices of dimension (n, ).
+    b : np.ndarray
+        Array with price sensititivies of dimension (n, ). 
+    
+    Returns
+    -------
+    np.ndarray
+        Lefthandside of the vee operator, dimension (m, n)
+    """
     p_q_ub = np.repeat(
         np.expand_dims(q * p, axis=1),
         len(p),
@@ -12,7 +38,22 @@ def get_lhs_vee(q, p, b):
     return 1 / b + np.sum(p_q_ub, axis=2)
 
 
-def get_p_r(p, radius):
+def get_p_r(p: np.ndarray, radius: float) -> np.ndarray:
+    """Get price extremes
+    
+    Parameters
+    ----------
+    p : np.ndarray
+        Price vector of dimension (n, 1)
+    radius : float
+        Float for constructing price extremes
+    
+    Returns
+    -------
+    np.ndarray
+        Price matrix of dimension (n, n), the i'th row pertains to a price 
+        vector where the i'th element is low and the rest is high. 
+    """
     n = len(p)
     delta = np.full((n, n), radius)
     np.fill_diagonal(delta, -radius)
@@ -33,7 +74,7 @@ def get_q(p, A, b):
     )
 
 
-def get_lipschitz_constant(lhs_vee, rhs_vee, q_ub_r, b, w):
+def _get_lipschitz_constant(lhs_vee, rhs_vee, q_ub_r, b, w):
     return np.max(
         np.sum(
             np.expand_dims(w, axis=-1)
