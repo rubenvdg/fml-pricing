@@ -5,7 +5,7 @@ from scipy.optimize import root
 class Problem:
     """Represents an instance of the FML pricing problem"""
 
-    def __init__(self, n, m, a_range, b_range, seed):
+    def __init__(self, n, m, a_range, b_range, seed, decision_variable='p'):
         self.seed, self.n, self.m = seed, n, m
         if self.seed:
             np.random.seed(self.seed)
@@ -14,42 +14,24 @@ class Problem:
         self.b = np.random.uniform(*b_range, size=n)
         a = [np.random.uniform(*a_range, size=n) for _ in range(self.m)]
         self.segments = [Segment(_a, self.b, _w) for _a, _w in zip(a, self.w)]
-        self.p_lb, self.p_ub = self.compute_bounds_p()
         self.A = np.asarray([segment.a for segment in self.segments])
         self.B = np.asarray([segment.b for segment in self.segments])
+        self.p_lb, self.p_ub = self.compute_price_bounds()
 
-        # compute bounds on prices
+        if decision_variable == 'p':
+            self.decision_var_lb = self.p_lb
+            self.decision_var_ub = self.p_ub
+            return
+        
+        # compute bounds on no-purchase probabilities
         for segment in self.segments:
             segment.x_lb = segment.no_purchase_probability(self.p_lb)
             segment.x_ub = segment.no_purchase_probability(self.p_ub)
 
-    def revenue(self, p):
-        expU = np.exp(self.A - self.B * p)
-        prob = expU / (1 + expU.sum(axis=1, keepdims=True))
-        return np.sum(np.sum(prob * p, axis=1) * self.w)
-
-    def gradient(self, p):
-        w_ = np.expand_dims(self.w, axis=1)
-        p_ = np.expand_dims(p, axis=0)
-        b_ = np.expand_dims(self.b, axis=0)
-        
-        expU = np.exp(self.A - self.B * p_)
-        prob = expU / (1 + expU.sum(axis=1, keepdims=True))
-        
-        return np.sum(
-            (
-                prob *
-                w_ *
-                (1 - p_ * b_ + b_ * np.sum(prob * p_, axis=1, keepdims=True))
-            ),
-            axis=0
-        )
-
-    def hessian(self, p):
-        pass
+        self.decision_var_lb = [segment.x_lb for segment in self.segments]
+        self.decision_var_ub = [segment.x_ub for segment in self.segments]
     
-    def compute_bounds_p(self):
-
+    def compute_price_bounds(self):
         # compute upper bound on segment revenues
         ub_pi = []
         for segment in self.segments:
