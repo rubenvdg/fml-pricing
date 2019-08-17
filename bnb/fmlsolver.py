@@ -12,7 +12,7 @@ from problem import Problem
 solvers.options['show_progress'] = False
 
 
-class BranchAndBound:
+class FMLSolver:
     '''
     Represents the branch-and-bound algorithm from the paper
     "Price Optimization Under the Finite-Mixture Logit Model" (2018)
@@ -346,8 +346,8 @@ if __name__ == '__main__':
     seed = 1
 
     problem = Problem(n, m, a_range, b_range, seed)
-    bnb = BranchAndBound(max_iter, epsilon, problem)
-    bnb.solve()
+    fmlsolver = FMLSolver(max_iter, epsilon, problem)
+    fmlsolver.solve()
 
-    print(bnb.exit_msg)
-    print(f"Time elapsed: {bnb.timer:.2f}")
+    print(fmlsolver.exit_msg)
+    print(f"Time elapsed: {fmlsolver.timer:.2f}")

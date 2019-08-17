@@ -2,7 +2,7 @@ import numdifftools as nd
 import numpy as np
 
 from bnb.problem import Problem
-from bnb.naive_optimizer import (
+from bnb.naivesolver import (
     get_lhs_vee,
     get_p_r,
     get_q,
