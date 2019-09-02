@@ -5,8 +5,10 @@ from .problem import Problem
 
 class NaiveSolver(BranchAndBound):
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, problem, *args, **kwargs):
+        self.problem = problem
+        bounds = (problem.p_lb, problem.p_ub)
+        super().__init__(bounds, *args, **kwargs)
 
     def compute_lower_bound(self, cube: Cube) -> float:
         return self.objective_function(cube.center)
@@ -18,16 +20,16 @@ class NaiveSolver(BranchAndBound):
         )
 
     def objective_function(self, p):
-        expU = np.exp(self.A - self.B * p)
+        expU = np.exp(self.problem.A - self.problem.B * p)
         prob = expU / (1 + expU.sum(axis=1, keepdims=True))
-        return np.sum(np.sum(prob * p, axis=1) * self.w)
+        return np.sum(np.sum(prob * p, axis=1) * self.problem.w)
 
     def gradient(self, p):
-        w_ = np.expand_dims(self.w, axis=1)
+        w_ = np.expand_dims(self.problem.w, axis=1)
         p_ = np.expand_dims(p, axis=0)
-        b_ = np.expand_dims(self.b, axis=0)
+        b_ = np.expand_dims(self.problem.b, axis=0)
         
-        expU = np.exp(self.A - self.B * p_)
+        expU = np.exp(self.problem.A - self.problem.B * p_)
         prob = expU / (1 + expU.sum(axis=1, keepdims=True))
         
         return np.sum(
@@ -40,7 +42,7 @@ class NaiveSolver(BranchAndBound):
         )
 
     def get_lipschitz_constant(self, p, radius):
-        A, b, w = self.A, self.b, self.w
+        A, b, w = self.problem.A, self.problem.b, self.problem.w
         p_lb_r, p_ub_r = self.get_p_r(p, radius)
         q_lb_r = self.get_q(p_lb_r, A, b)
         q_ub_r = self.get_q(p_ub_r, A, b)

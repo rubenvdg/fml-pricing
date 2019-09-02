@@ -40,7 +40,6 @@ class FMLSolver:
         self.x_lb = np.asarray([segment.x_lb for segment in self.segments])
         self.radius = np.max(self.x_ub - self.x_lb) / 2
         self.E = np.asarray([np.exp(segment.a) for segment in self.segments]).T
-        print(self.E.shape)
         self.k = self.E * self.w.reshape(1, -1) / self.b.reshape(-1, 1)
 
     def solve(self):

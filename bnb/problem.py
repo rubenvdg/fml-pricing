@@ -9,27 +9,27 @@ class Problem:
         self.seed, self.n, self.m = seed, n, m
         if self.seed:
             np.random.seed(self.seed)
+
+        # sample random parameters
         self.w = np.random.uniform(0, 1, size=m)
         self.w /= np.sum(self.w)
         self.b = np.random.uniform(*b_range, size=n)
         a = [np.random.uniform(*a_range, size=n) for _ in range(self.m)]
+
+        # initialize segments
         self.segments = [Segment(_a, self.b, _w) for _a, _w in zip(a, self.w)]
         self.A = np.asarray([segment.a for segment in self.segments])
         self.B = np.asarray([segment.b for segment in self.segments])
+
+        # compute price bounds 
         self.p_lb, self.p_ub = self.compute_price_bounds()
 
-        if decision_variable == 'p':
-            self.decision_var_lb = self.p_lb
-            self.decision_var_ub = self.p_ub
-            return
-        
         # compute bounds on no-purchase probabilities
         for segment in self.segments:
             segment.x_lb = segment.no_purchase_probability(self.p_lb)
             segment.x_ub = segment.no_purchase_probability(self.p_ub)
-
-        self.decision_var_lb = [segment.x_lb for segment in self.segments]
-        self.decision_var_ub = [segment.x_ub for segment in self.segments]
+        self.x_lb = [segment.x_lb for segment in self.segments]
+        self.x_ub = [segment.x_ub for segment in self.segments]
     
     def compute_price_bounds(self):
         # compute upper bound on segment revenues
