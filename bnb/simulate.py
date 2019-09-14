@@ -1,8 +1,13 @@
+import csv
 import datetime
+from itertools import product
 import os
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import scipy.stats as st
+from tqdm import tqdm
 
 from bnb.fml_solver import FMLSolver
 from bnb.naivesolver import NaiveSolver
@@ -10,96 +15,65 @@ from bnb.problem import Problem
 
 
 def simulate(path, reps):
-
-    for m in [2, 3, 4]:
-
-        seed = 0
-        a_range = (-4.0, 4.0)
-        b_range = (0.001, 0.01)
-        n_range = np.arange(10, 51, 10)
-
-        for n in n_range:
-            print(f'n: {n}')
-            cputime = []
-            iterations = []
-
-            for _ in range(reps):
-
-                seed += 1
-                problem = Problem(n, m, a_range, b_range, seed)
-
-                fmlsolver = FMLSolver(problem, multiprocess=True)
-                fmlsolver.solve()
-
-                cputime.append(fmlsolver.timer)
-                iterations.append(fmlsolver.iter)
-
-            cputime_std_error = np.std(cputime) / np.sqrt(len(cputime))
-            cputime = np.mean(cputime)
-
-            iterations_std_error = np.std(iterations) / np.sqrt(len(iterations))
-            iterations = np.mean(iterations)
-
-            pd.DataFrame({
-                "n": [n],
-                "cputime": [cputime],
-                "cputime_std_error": [cputime_std_error],
-                "iterations": [iterations],
-                "iterations_std_error": [iterations_std_error],
-            }).to_csv(f"{path}/runtime_in_n{n}_m{m}.csv")
-
-
-# def vary_n(path, reps=50):
     
-#     for n in [10, 30, 50]:
-#         seed = 50
-#         max_iter = np.inf
-#         a_range = (-4.0, 4.0)
-#         b_range = (0.001, 0.01)
-#         epsilon = 0.01
-#         m_range = [1, 2, 3, 4]
+    a_range = (-4.0, 4.0)
+    b_range = (0.001, 0.01)
+    n_range = [10, 20, 30, 40, 50]
+    m_range = [2, 3]
+    seed = 0
     
-#         for m in m_range:
+    csv_path = path.joinpath('results.csv')
+    with open(csv_path, 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile, delimiter=',')
+        csvwriter.writerow(['n', 'm', 'seed', 'cputime', 'iterations'])
 
-#             cputime = []
-#             iterations = []
-    
-#             for _ in range(reps):
-    
-#                 seed += 1
-#                 bnb = BranchAndBound(
-#                     n=n,
-#                     m=m,
-#                     seed=seed,
-#                     max_iter=max_iter,
-#                     a_range=a_range,
-#                     b_range=b_range,
-#                     epsilon=epsilon,
-#                 )
-    
-#                 bnb.bnb()
-    
-#                 cputime.append(bnb.timer)
-#                 iterations.append(bnb.iter)
-    
-#             cputime_std_error = np.std(cputime) / np.sqrt(len(cputime))
-#             cputime = np.mean(cputime)
-    
-#             iterations_std_error = np.std(iterations) / np.sqrt(len(iterations))
-#             iterations = np.mean(iterations)
-    
-#             pd.DataFrame({
-#                 "m": [m],
-#                 "cputime": [cputime],
-#                 "cputime_std_error": [cputime_std_error],
-#                 "iterations": [iterations],
-#                 "iterations_std_error": [iterations_std_error],
-#             }).to_csv(f"{path}/runtime_in_m{m}_n{n}.csv")
+    for n, m, _ in tqdm(list(product(n_range, m_range, range(reps)))):
+
+        seed += 1
+        problem = Problem(n, m, a_range, b_range, seed)
+        fmlsolver = FMLSolver(problem, multiprocess=True)
+        fmlsolver.solve()
+
+        with open(csv_path, 'a', newline='') as csvfile:
+            csvwriter = csv.writer(csvfile, delimiter=',')
+            cpu_time = str(fmlsolver.timer)
+            iters = str(fmlsolver.iter)
+            csvwriter.writerow([str(n), str(m), str(seed), cpu_time, iters])
+
+    _make_summary(csv_path)    
+
+
+def _make_summary(csv_path):
+
+    (
+        pd.read_csv(csv_path)
+        .melt(id_vars=['n', 'm', 'seed'])
+        .groupby(['n', 'm', 'variable'])
+        ['value']
+        .agg(
+            mean='mean',
+            std='std',
+            sem=st.sem,
+            count='size',
+        )
+        .reset_index()
+        .assign(
+            ci=_get_ci,
+            ci_lb=lambda df: df['ci'].map(lambda ci: ci[0]),
+            ci_ub=lambda df: df['ci'].map(lambda ci: ci[1])
+        )
+        .drop(columns='ci')
+        .to_csv(csv_path.parent.joinpath('summary.csv'), index=False)
+    )
+
+
+def _get_ci(df, q=0.95):
+    return list(zip(*st.t.interval(q, df['count'] - 1, loc=df['mean'], scale=df['sem'])))
 
 
 if __name__ == '__main__':
-    path = os.path.join('sim_results', datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
-    os.makedirs(path)
-    simulate(path=path, reps=50)
-    
+    folder_name = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    path = Path('sim_results', folder_name)
+    path.mkdir()
+    simulate(path=path, reps=10)
 
