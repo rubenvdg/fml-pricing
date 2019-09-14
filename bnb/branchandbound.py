@@ -8,21 +8,20 @@ import numpy as np
 class Cube:
     ''' Represents a hypercube during optimization '''
 
-    def __init__(self, center, radius, x_start=None):
+    def __init__(self, center, radius, theta_start=None):
         self.center = center
         self.radius = radius
         self.branch = True
         self.objective_ub = None
         self.objective_lb = None
         self.objective_lower_bound_x = None
-        self.x_start = x_start
+        self.theta_start = theta_start
 
 
 class BranchAndBound:
 
     def __init__(self, bounds, epsilon=0.01, multiprocess=True):
         
-        self.logger = logging.getLogger(__name__)
         self.epsilon = epsilon
         self.iter = 0
         self.multiprocess = multiprocess
@@ -45,31 +44,26 @@ class BranchAndBound:
 
     def solve(self):
         t0 = time.time()
-        while not self.converged:
+        while not self.converged():
             self.iter += 1
-            self.logger.debug('Iteration %s.', self.iter)
-            self.logger.debug('Optimality gap %s', self.opt_gap)
             self.radius /= 2
             self.branch()
-            self.logger.debug('Number of cubes %s', len(self.cubes))
             self.bound()
         
         self.timer = time.time() - t0
-        self.logger.debug('Revenue lower bound %s', self.objective_lb)
 
-    @property
     def opt_gap(self):
         return 1 - self.objective_lb / self.objective_ub
 
-    @property
     def converged(self):
-        if self.opt_gap < self.epsilon:
-            self.exit_msg = f"Opt_gap = {self.opt_gap} (< epsilon)."
+        if self.opt_gap() < self.epsilon:
+            self.exit_msg = f"Opt_gap = {self.opt_gap()} (< epsilon)."
             return True
         return False
 
     def bound(self):
         
+        # bound each cube
         if self.multiprocess:
             with Pool() as pool:
                 self.cubes = [
@@ -83,18 +77,18 @@ class BranchAndBound:
         else: 
             self.cubes = self._bound_cubes(self.cubes)
 
-        self.objective_ub = - np.inf
+        # update bounds
+        objective_lb_cubes = np.max([cube.objective_lb for cube in self.cubes])
+        self.objective_lb = np.max([self.objective_lb, objective_lb_cubes])
+        self.objective_ub = np.max([cube.objective_ub for cube in self.cubes])
+
         for cube in self.cubes:
-            if cube.objective_lb > self.objective_lb:
-                self.objective_lb = cube.objective_lb
             if cube.objective_ub < self.objective_lb:
                 cube.branch = False
-            if cube.objective_ub > self.objective_ub:
-                self.objective_ub = cube.objective_ub 
     
     def _bound_cube(self, cube):
-        cube.objective_lb = self.compute_lower_bound(cube)
         cube.objective_ub = self.compute_upper_bound(cube)
+        cube.objective_lb = self.compute_lower_bound(cube)
         return cube
     
     def _bound_cubes(self, cubes):
@@ -105,7 +99,7 @@ class BranchAndBound:
             Cube(
                 cube.center + omega * self.radius,
                 self.radius,
-                x_start=cube.x_start
+                theta_start=cube.theta_start
             )
             for omega in self.omega for cube in self.cubes if cube.branch
         ]

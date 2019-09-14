@@ -35,9 +35,10 @@ class FMLSolver(BranchAndBound):
         self.n = len(self.problem.p_lb)
         self.m = len(self.problem.x_lb)
 
-    def compute_upper_bound(self, cube: Cube) -> float:
+        self.lp_constraints = None
+        self._init_lp()
 
-        n, m = self.n, self.m
+    def compute_upper_bound(self, cube: Cube) -> float:
 
         if np.any(cube.center - cube.radius > self.problem.x_ub):
             # outside [x_lb, x_ub] -> set upper bound low as to not branch
@@ -87,8 +88,8 @@ class FMLSolver(BranchAndBound):
     def _dual(theta, E, u, m, n, z_lb, z_ub, kx):
 
         lam = theta[:m]
-        exp_nu_lb = np.exp(theta[m:n+m])
-        exp_nu_ub = np.exp(theta[n+m:])
+        exp_nu_lb = np.exp(theta[m:n + m])
+        exp_nu_ub = np.exp(theta[n + m:])
         z = np.exp((E.dot(lam) + exp_nu_ub - exp_nu_lb) / kx - 1)
 
         return (
@@ -101,8 +102,8 @@ class FMLSolver(BranchAndBound):
     @staticmethod
     def _dual_gradient(theta, E, u, m, n, z_lb, z_ub, kx):
         lam = theta[:m]
-        exp_nu_lb = np.exp(theta[m:n+m])
-        exp_nu_ub = np.exp(theta[n+m:])
+        exp_nu_lb = np.exp(theta[m:n + m])
+        exp_nu_ub = np.exp(theta[n + m:])
         z = np.exp((E.dot(lam) + exp_nu_ub - exp_nu_lb) / kx - 1)
         return np.hstack([
             E.T.dot(z) - u,
@@ -112,14 +113,14 @@ class FMLSolver(BranchAndBound):
 
     def _dual_dx_norm_ub(self, cube, min_problem):
         ''' Compute L(x,r) defined in the accompanying paper '''
-        n, m = self.n, self.m 
+        n, m, E = self.n, self.m, self.problem.E
+        x_lb, x_ub = self.problem.x_lb, self.problem.x_ub
+        x, r = cube.center, cube.radius
+
         lam = min_problem.x[:m]
         nu_lb = np.exp(min_problem.x[m:n+m])
         nu_ub = np.exp(min_problem.x[m+n:])
-        E = self.problem.E
-        x = cube.center
-        r = cube.radius
-        x_lb, x_ub = self.problem.x_lb, self.problem.x_ub
+
         x_ = x + r
         z_arg = (lam.dot(E.T) - nu_lb + nu_ub) / np.inner(self.problem.k, x_) - 1
         z = np.exp(z_arg)
@@ -136,18 +137,16 @@ class FMLSolver(BranchAndBound):
 
         return np.max([np.max(i), np.max(ii)])
 
-    def _minimize_dual(self, cube, x_delta):
+    def _minimize_dual(self, cube, x_delta, tries=10):
 
-        success = False
         u = (1 - x_delta) / x_delta
         kx = np.inner(self.problem.k, x_delta)
-        count_tries = 0
         theta_start = cube.theta_start
+        dual_dim = 2 * self.n + self.m
+        args = (self.problem.E, u, self.m, self.n, self.z_lb, self.z_ub, kx)
 
-        while not success:
+        for _ in range(tries):
 
-            count_tries += 1
-            args = (self.problem.E, u, self.m, self.n, self.z_lb, self.z_ub, kx)
             min_problem = minimize(
                 self._dual,
                 theta_start,
@@ -157,85 +156,113 @@ class FMLSolver(BranchAndBound):
             )
 
             if min_problem.success:
-                success = True
-            elif count_tries > 10 and min_problem.status != 2:
-                exc = (
-                    f"dual optimization failed at cube.center {1 / (1 + u)}"
-                    f" and self.radius {self.radius}, opt: \n{min_problem}"
-                )
-                raise Exception(exc)
-            else:
-                dual_dim = 2 * self.n + self.m
-                theta_start = np.random.uniform(-20.0, -50.0, size=dual_dim)
+                return min_problem
 
-        return min_problem
-
+            theta_start = np.random.uniform(-20.0, -50.0, size=dual_dim)
+            
+        # if count_tries > 10 and min_problem.status != 2:
+        exc = (
+            f"dual optimization failed at cube.center {1 / (1 + u)}"
+            f" and self.radius {self.radius}, opt: \n{min_problem}"
+        )
+        raise Exception(exc)
+            
     def _solve_lp(self, cube):
         
-        n, m = self.n, self.m
-        E = self.problem.E
-        r = self.radius
-
         x = cube.center
         u = (1 - x) / x
-
-        c = matrix(np.hstack([np.zeros(n + 2 * m), np.ones(1)]))
-
         b_eq = matrix(u)
-        A_eq = matrix(np.hstack([E.T,
-                                 np.identity(m),
-                                 -np.identity(m),
-                                 np.zeros((m, 1))]))
+        r = self.radius
 
-        b_ub_1 = np.zeros(m)
-        A_ub_1 = np.hstack([np.zeros((m, n)),
-                            np.identity(m),
-                            np.identity(m),
-                            -np.ones((m, 1))])
-
-        b_ub_2 = u - (1 - (x + r)) / (x + r)
-        A_ub_2 = np.hstack([np.zeros((m, n)),
-                            np.identity(m),
-                            np.zeros((m, m)),
-                            np.zeros((m, 1))])
-
-        b_ub_3 = np.zeros(m)
-        A_ub_3 = np.hstack([np.zeros((m, n)),
-                            - np.identity(m),
-                            np.zeros((m, m)),
-                            np.zeros((m, 1))])
-
-        b_ub_4 = (1 - (x - r)) / (x - r) - u
-        A_ub_4 = np.hstack([np.zeros((m, n)),
-                            np.zeros((m, m)),
-                            np.identity(m),
-                            np.zeros((m, 1))])
-
-        b_ub_5 = np.zeros(m)
-        A_ub_5 = np.hstack([np.zeros((m, n)),
-                            np.zeros((m, m)),
-                            - np.identity(m),
-                            np.zeros((m, 1))])
-
-        b_ub_6 = - self.z_lb
-        A_ub_6 = np.hstack([-np.identity(n),
-                            np.zeros((n, m)),
-                            np.zeros((n, m)),
-                            np.zeros((n, 1))])
-
-        b_ub_7 = self.z_ub
-        A_ub_7 = np.hstack([np.identity(n),
-                            np.zeros((n, m)),
-                            np.zeros((n, m)),
-                            np.zeros((n, 1))])
-
-        A_ub = matrix(np.vstack([
-            A_ub_1, A_ub_2, A_ub_3, A_ub_4, A_ub_5, A_ub_6, A_ub_7]))
-        b_ub = matrix(np.hstack([
-            b_ub_1, b_ub_2, b_ub_3, b_ub_4, b_ub_5, b_ub_6, b_ub_7]))
+        b_ub_6 = u - (1 - (x + r)) / (x + r)
+        b_ub_7 = (1 - (x - r)) / (x - r) - u
+        cnstr = self.lp_constraints
+        b_ub = matrix([cnstr['b_ub'], matrix(np.hstack([b_ub_6, b_ub_7]))])
 
         self.lp = solvers.lp(
-            c, A_ub, b_ub, A_eq, b_eq,
+            cnstr['c'], cnstr['A_ub'], b_ub, cnstr['A_eq'], b_eq,
             solver='glpk',
             options={'glpk': {'msg_lev': 'GLP_MSG_OFF'}}
         )
+
+    def _init_lp(self):
+
+        n, m, E = self.n, self.m, self.problem.E
+        
+        c = matrix(np.hstack([np.zeros(n + 2 * m), np.ones(1)]))
+        A_eq = matrix(np.hstack([
+            E.T,
+            np.identity(m),
+            -np.identity(m),
+            np.zeros((m, 1))
+        ]))
+
+        b_ub_1 = np.zeros(m)
+        b_ub_2 = - self.z_lb
+        b_ub_3 = np.zeros(m)
+        b_ub_4 = self.z_ub
+        b_ub_5 = np.zeros(m)
+        
+        b_ub = matrix(np.hstack([
+            b_ub_1, b_ub_2, b_ub_3, b_ub_4, b_ub_5
+        ]))
+
+        A_ub_1 = np.hstack([
+            np.zeros((m, n)),
+            np.identity(m),
+            np.identity(m),
+            -np.ones((m, 1))
+        ])
+
+        A_ub_2 = np.hstack([
+            -np.identity(n),
+            np.zeros((n, m)),
+            np.zeros((n, m)),
+            np.zeros((n, 1))
+        ])
+
+        A_ub_3 = np.hstack([
+            np.zeros((m, n)),
+            - np.identity(m),
+            np.zeros((m, m)),
+            np.zeros((m, 1))
+        ])
+        
+        A_ub_4 = np.hstack([
+            np.identity(n),
+            np.zeros((n, m)),
+            np.zeros((n, m)),
+            np.zeros((n, 1))
+        ])
+
+        A_ub_5 = np.hstack([
+            np.zeros((m, n)),
+            np.zeros((m, m)),
+            - np.identity(m),
+            np.zeros((m, 1))
+        ])
+
+        A_ub_6 = np.hstack([
+            np.zeros((m, n)),
+            np.identity(m),
+            np.zeros((m, m)),
+            np.zeros((m, 1))
+        ])
+
+        A_ub_7 = np.hstack([
+            np.zeros((m, n)),
+            np.zeros((m, m)),
+            np.identity(m),
+            np.zeros((m, 1))
+        ])
+
+        A_ub = matrix(np.vstack([
+            A_ub_1, A_ub_2, A_ub_3, A_ub_4, A_ub_5, A_ub_6, A_ub_7
+        ]))
+
+        self.lp_constraints = {
+            'c': c,
+            'A_ub': A_ub,
+            'A_eq': A_eq,
+            'b_ub': b_ub
+        }
