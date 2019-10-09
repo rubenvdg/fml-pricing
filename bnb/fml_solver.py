@@ -1,7 +1,3 @@
-from itertools import product
-from multiprocessing import Pool
-import time
-
 from cvxopt import matrix, solvers
 import numpy as np
 from numpy.linalg import norm
@@ -30,6 +26,7 @@ class FMLSolver(BranchAndBound):
         self.problem = problem
         bounds = (problem.x_lb, problem.x_ub)
         super().__init__(bounds, *args, **kwargs)
+
         self.z_lb = np.exp(-problem.p_ub * problem.b)
         self.z_ub = np.exp(-problem.p_lb * problem.b)
         self.n = len(self.problem.p_lb)
