@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from bnb.fml_solver import FMLSolver
 from bnb.naivesolver import NaiveSolver
-from bnb.problem import Problem
+from bnb.problem import OptimizationProblem
 
 
 def simulate(
@@ -33,8 +33,15 @@ def simulate(
 
     for n, m, _ in tqdm(list(product(n_range, m_range, range(reps)))):
 
-        seed += 1
-        problem = Problem(n, m, a_range, b_range, seed)
+        seed += 1    
+        np.random.seed(seed)
+
+        # sample random parameters
+        w = np.random.uniform(0, 1, size=m)
+        w /= np.sum(w)
+        a = [np.random.uniform(*a_range, size=n) for _ in range(m)]
+        b = np.random.uniform(*b_range, size=n)
+        problem = OptimizationProblem(a, b, w)
         solver = Solver(problem)
         solver.solve()
 
@@ -51,11 +58,11 @@ if __name__ == '__main__':
 
     a_range = (-4.0, 4.0)
     b_range = (0.001, 0.01)
-    # n_range = [10, 20, 30, 40, 50]
-    # m_range = [1, 2, 3, 4]
-    n_range = [2, 4, 6]
-    m_range = [2, 3]
-    reps = 5
+    n_range = [10, 20, 30, 40, 50]
+    m_range = [1, 2, 3, 4]
+    # n_range = [2, 4, 6]
+    # m_range = [2, 3]
+    reps = 30
 
     file_name = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.csv'
     output_path = Path('sim_results', file_name)
