@@ -1,6 +1,6 @@
 import numpy as np
 from .branchandbound import Cube, BranchAndBound
-from .problem import Problem
+from .problem import OptimizationProblem
 
 
 class NaiveSolver(BranchAndBound):

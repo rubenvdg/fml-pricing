@@ -2,8 +2,6 @@ from cvxopt import matrix, solvers
 import numpy as np
 from numpy.linalg import norm
 from scipy.optimize import minimize
-
-from .problem import Problem
 from .branchandbound import (
     BranchAndBound,
     Cube
