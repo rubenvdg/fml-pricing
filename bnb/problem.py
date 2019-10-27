@@ -2,34 +2,34 @@ import numpy as np
 from scipy.optimize import root
 
 
-class Problem:
+class OptimizationProblem:
     """Represents an instance of the FML pricing problem"""
 
-    def __init__(self, n, m, a_range, b_range, seed, decision_variable='p'):
-        self.seed, self.n, self.m = seed, n, m
-        if self.seed:
-            np.random.seed(self.seed)
-        self.w = np.random.uniform(0, 1, size=m)
-        self.w /= np.sum(self.w)
-        self.b = np.random.uniform(*b_range, size=n)
-        a = [np.random.uniform(*a_range, size=n) for _ in range(self.m)]
-        self.segments = [Segment(_a, self.b, _w) for _a, _w in zip(a, self.w)]
+    def __init__(self, a, b, w):
+        
+        #TODO: if python list, cast to np array
+        #TODO: check dimensions
+        self.n, self.m, self.b, self.w = len(b), len(a), b, w
+
+        # initialize segments
+        self.segments = [Segment(_a, b, _w) for _a, _w in zip(a, w)]
         self.A = np.asarray([segment.a for segment in self.segments])
         self.B = np.asarray([segment.b for segment in self.segments])
+
+        # compute price bounds 
         self.p_lb, self.p_ub = self.compute_price_bounds()
 
-        if decision_variable == 'p':
-            self.decision_var_lb = self.p_lb
-            self.decision_var_ub = self.p_ub
-            return
-        
         # compute bounds on no-purchase probabilities
         for segment in self.segments:
             segment.x_lb = segment.no_purchase_probability(self.p_lb)
             segment.x_ub = segment.no_purchase_probability(self.p_ub)
+        self.x_lb = np.asarray([segment.x_lb for segment in self.segments])
+        self.x_ub = np.asarray([segment.x_ub for segment in self.segments])
 
-        self.decision_var_lb = [segment.x_lb for segment in self.segments]
-        self.decision_var_ub = [segment.x_ub for segment in self.segments]
+        # define helper variables
+        self.E = np.asarray([np.exp(segment.a) for segment in self.segments]).T
+        self.k = self.E * w.reshape(1, -1) / b.reshape(-1, 1)
+
     
     def compute_price_bounds(self):
         # compute upper bound on segment revenues
@@ -59,4 +59,8 @@ class Segment:
         self.x_ub = None
 
     def no_purchase_probability(self, p):
-        return 1 / (1 + np.sum(np.exp(self.a - self.b * p)))
+        return 1 - np.sum(self.purchase_probabilities(p))
+
+    def purchase_probabilities(self, p):
+        utilities = self.a - self.b * p
+        return np.exp(utilities) / (1 + np.sum(np.exp(utilities)))

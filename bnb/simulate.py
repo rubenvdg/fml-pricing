@@ -1,108 +1,79 @@
+import csv
 import datetime
+from itertools import product
 import os
+from pathlib import Path
+from shutil import copyfile
+
 import numpy as np
 import pandas as pd
-from bnb import BranchAndBound
+import scipy.stats as st
+from tqdm import tqdm
+
+from bnb.fml_solver import FMLSolver
+from bnb.naivesolver import NaiveSolver
+from bnb.problem import OptimizationProblem
 
 
-def vary_m(path, reps=50):
+def simulate(
+        output_path,
+        reps,
+        Solver,
+        a_range,
+        b_range,
+        n_range,
+        m_range,
+        multiprocess=True):
 
-    for m in [2, 3, 4]:
-        seed = 50
-        max_iter = np.inf
-        a_range = (-4.0, 4.0)
-        b_range = (0.001, 0.01)
-        epsilon = 0.01
-        n_range = np.arange(10, 51, 10)
+    seed = 0    
+    with open(output_path, 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile, delimiter=',')
+        columns = ['n', 'm', 'seed', 'cputime', 'iterations', 'solver']
+        csvwriter.writerow(columns)
 
-        for n in n_range:
+    for m, n, _ in tqdm(list(product(m_range, n_range, range(reps)))):
 
-            cputime = []
-            iterations = []
+        seed += 1    
+        np.random.seed(seed)
 
-            for _ in range(reps):
+        # sample random parameters
+        w = np.random.uniform(0, 1, size=m)
+        w /= np.sum(w)
+        a = [np.random.uniform(*a_range, size=n) for _ in range(m)]
+        b = np.random.uniform(*b_range, size=n)
+        problem = OptimizationProblem(a, b, w)
+        solver = Solver(problem)
+        solver.solve()
 
-                seed += 1
-                bnb = BranchAndBound(
-                    n=n,
-                    m=m,
-                    seed=seed,
-                    max_iter=max_iter,
-                    a_range=a_range,
-                    b_range=b_range,
-                    epsilon=epsilon,
-                )
+        with open(output_path, 'a', newline='') as csvfile:
+            csvwriter = csv.writer(csvfile, delimiter=',')
+            cpu_time, iters = str(solver.timer), str(solver.iter)
+            solver_name = Solver.__name__
+            new_line = [str(n), str(m), str(seed), cpu_time, iters, solver_name]
+            csvwriter.writerow(new_line)
 
-                bnb.bnb()
-                cputime.append(bnb.timer)
-                iterations.append(bnb.iter)
-
-            cputime_std_error = np.std(cputime) / np.sqrt(len(cputime))
-            cputime = np.mean(cputime)
-
-            iterations_std_error = np.std(iterations) / np.sqrt(len(iterations))
-            iterations = np.mean(iterations)
-
-            pd.DataFrame({
-                "n": [n],
-                "cputime": [cputime],
-                "cputime_std_error": [cputime_std_error],
-                "iterations": [iterations],
-                "iterations_std_error": [iterations_std_error],
-            }).to_csv(f"{path}/runtime_in_n{n}_m{m}.csv")
-
-
-def vary_n(path, reps=50):
-    
-    for n in [10, 30, 50]:
-        seed = 50
-        max_iter = np.inf
-        a_range = (-4.0, 4.0)
-        b_range = (0.001, 0.01)
-        epsilon = 0.01
-        m_range = [1, 2, 3, 4]
-    
-        for m in m_range:
-
-            cputime = []
-            iterations = []
-    
-            for _ in range(reps):
-    
-                seed += 1
-                bnb = BranchAndBound(
-                    n=n,
-                    m=m,
-                    seed=seed,
-                    max_iter=max_iter,
-                    a_range=a_range,
-                    b_range=b_range,
-                    epsilon=epsilon,
-                )
-    
-                bnb.bnb()
-    
-                cputime.append(bnb.timer)
-                iterations.append(bnb.iter)
-    
-            cputime_std_error = np.std(cputime) / np.sqrt(len(cputime))
-            cputime = np.mean(cputime)
-    
-            iterations_std_error = np.std(iterations) / np.sqrt(len(iterations))
-            iterations = np.mean(iterations)
-    
-            pd.DataFrame({
-                "m": [m],
-                "cputime": [cputime],
-                "cputime_std_error": [cputime_std_error],
-                "iterations": [iterations],
-                "iterations_std_error": [iterations_std_error],
-            }).to_csv(f"{path}/runtime_in_m{m}_n{n}.csv")
-
+    copyfile(output_path, output_path.parent.joinpath('_lastrun.csv'))
 
 if __name__ == '__main__':
-    path = os.path.join('sim_results', datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S'))
-    os.makedirs(path)
-    vary_n(path=path, reps=2)
-    vary_m(path=path, reps=2)
+
+    a_range = (-4.0, 4.0)
+    b_range = (0.001, 0.01)
+    n_range = [10, 20, 30, 40, 50]
+    m_range = [1, 2, 3, 4]
+    # n_range = [2, 4, 6]
+    # m_range = [2, 3]
+    reps = 30
+
+    file_name = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.csv'
+    output_path = Path('sim_results', file_name)
+
+    simulate(
+        output_path=output_path,
+        reps=reps,
+        Solver=FMLSolver,
+        a_range=a_range,
+        b_range=b_range,
+        n_range=n_range,
+        m_range=m_range
+    )
 
