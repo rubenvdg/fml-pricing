@@ -31,7 +31,7 @@ def simulate(
         columns = ['n', 'm', 'seed', 'cputime', 'iterations', 'solver']
         csvwriter.writerow(columns)
 
-    for n, m, _ in tqdm(list(product(n_range, m_range, range(reps)))):
+    for m, n, _ in tqdm(list(product(m_range, n_range, range(reps)))):
 
         seed += 1    
         np.random.seed(seed)
