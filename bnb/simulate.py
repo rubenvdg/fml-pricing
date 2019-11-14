@@ -58,11 +58,11 @@ if __name__ == '__main__':
 
     a_range = (-4.0, 4.0)
     b_range = (0.001, 0.01)
-    n_range = [10, 30, 50]
-    m_range = [1, 2, 3, 4]
-    # n_range = [2, 4, 6]
-    # m_range = [2, 3]
-    reps = 30
+    # n_range = [10, 30, 50]
+    # m_range = [1, 2, 3, 4]
+    n_range = [50]
+    m_range = [4]
+    reps = 1
 
     file_name = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.csv'
     output_path = Path('sim_results', file_name)
