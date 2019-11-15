@@ -42,7 +42,7 @@ def simulate(
         a = [np.random.uniform(*a_range, size=n) for _ in range(m)]
         b = np.random.uniform(*b_range, size=n)
         problem = OptimizationProblem(a, b, w)
-        solver = Solver(problem)
+        solver = Solver(problem, multiprocess=multiprocess)
         solver.solve()
 
         with open(output_path, 'a', newline='') as csvfile:
@@ -61,7 +61,7 @@ if __name__ == '__main__':
     # n_range = [10, 30, 50]
     # m_range = [1, 2, 3, 4]
     n_range = [50]
-    m_range = [4]
+    m_range = [3]
     reps = 1
 
     file_name = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.csv'
@@ -74,6 +74,7 @@ if __name__ == '__main__':
         a_range=a_range,
         b_range=b_range,
         n_range=n_range,
-        m_range=m_range
+        m_range=m_range,
+        multiprocess=False
     )
 
