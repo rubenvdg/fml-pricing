@@ -1,7 +1,8 @@
 import csv
 import datetime
-from itertools import product
 import os
+import warnings
+from itertools import product
 from pathlib import Path
 from shutil import copyfile
 
@@ -13,7 +14,9 @@ from tqdm import tqdm
 from bnb.fml_solver import FMLSolver
 from bnb.naivesolver import NaiveSolver
 from bnb.problem import OptimizationProblem
+from gradient_descent import GradientDescent
 
+warnings.filterwarnings('error')
 
 def simulate(
         output_path,
@@ -25,15 +28,16 @@ def simulate(
         m_range,
         multiprocess=True):
 
-    seed = 0    
+    seed = 0
+
     with open(output_path, 'w', newline='') as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=',')
         columns = ['n', 'm', 'seed', 'cputime', 'iterations', 'solver']
         csvwriter.writerow(columns)
 
-    for m, n, _ in tqdm(list(product(m_range, n_range, range(reps)))):
+    for _, m, n in tqdm(list(product(range(reps), m_range, n_range))):
 
-        seed += 1    
+        seed += 1
         np.random.seed(seed)
 
         # sample random parameters
@@ -42,8 +46,11 @@ def simulate(
         a = [np.random.uniform(*a_range, size=n) for _ in range(m)]
         b = np.random.uniform(*b_range, size=n)
         problem = OptimizationProblem(a, b, w)
-        solver = Solver(problem, multiprocess=multiprocess)
+        solver = Solver(problem, multiprocess=multiprocess, epsilon=0.01)
         solver.solve()
+        gd = GradientDescent(a, b, w)
+        print("gs solution: ", gd.solve())
+        print("time elapsed: ", solver.timer)
 
         with open(output_path, 'a', newline='') as csvfile:
             csvwriter = csv.writer(csvfile, delimiter=',')
@@ -56,13 +63,13 @@ def simulate(
 
 if __name__ == '__main__':
 
-    a_range = (-4.0, 4.0)
+    a_range = (0.0, 10.0)
     b_range = (0.001, 0.01)
-    # n_range = [10, 30, 50]
-    # m_range = [1, 2, 3, 4]
-    n_range = [50]
-    m_range = [3]
-    reps = 1
+    n_range = [10, 20, 30, 40, 50]
+    m_range = [1, 2, 3, 4]
+    # n_range = [40]
+    # m_range = [4]
+    reps = 20
 
     file_name = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S') + '.csv'
     output_path = Path('sim_results', file_name)
@@ -75,6 +82,5 @@ if __name__ == '__main__':
         b_range=b_range,
         n_range=n_range,
         m_range=m_range,
-        multiprocess=False
+        multiprocess=True
     )
-

@@ -5,4 +5,3 @@ numdifftools==0.9.39
 pandas==0.25.2
 tqdm==4.36.1
 statsmodels==0.10.1
-bnb
