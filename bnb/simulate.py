@@ -63,7 +63,7 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
                 json.dumps(par),
                 solver.objective_lb,
                 solver.objective_ub,
-                gd_sol
+                gd_sol,
             ]
             csvwriter.writerow(new_line)
 
@@ -74,11 +74,12 @@ if __name__ == "__main__":
 
     a_range = (0.0, 4.0)
     b_range = (0.001, 0.01)
+    n_range = [10, 20, 30, 40, 50]
     # n_range = [10, 30, 50]
-    # m_range = [1, 2, 3, 4]
-    n_range = [5]
-    m_range = [3]
-    reps = 1
+    m_range = [1, 2, 3, 4]
+    # n_range = [20]
+    # m_range = [3]
+    reps = 5
 
     file_name = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv"
     output_path = Path("sim_results", file_name)
@@ -91,5 +92,5 @@ if __name__ == "__main__":
         b_range=b_range,
         n_range=n_range,
         m_range=m_range,
-        multiprocess=False,
+        multiprocess=True,
     )

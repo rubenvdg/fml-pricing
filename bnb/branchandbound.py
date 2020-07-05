@@ -49,13 +49,6 @@ class BranchAndBound:
             self.radius /= 2
             self.branch()
             self.bound()
-            # for cube in self.cubes:
-            #     print(cube.center)
-            #     print(cube.objective_lb)
-            #     print(cube.objective_ub)
-            #     print("")
-            # if self.iter == 2:
-                # assert False
 
         self.timer = time.time() - t0
 

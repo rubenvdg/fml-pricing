@@ -1,4 +1,36 @@
+    # def new_upper_bound_dual(self, cube):
 
+    #     E, k = self.problem.E, self.problem.k
+    #     n, m = self.n, self.m
+
+    #     # x_delta, _ = self._get_x_r_delta(cube)
+
+    #     x_ub = cube.center + cube.radius
+    #     x_lb = cube.center - cube.radius
+    #     # x_ub = x_delta
+    #     # x_lb = x_delta
+
+    #     z_lb = np.exp(-self.problem.p_ub * self.problem.b)
+    #     z_ub = np.exp(-self.problem.p_lb * self.problem.b)
+
+    #     kx_ub = k @ x_ub
+
+    #     def _dual_new_ub(theta):
+    #         lam1, lam2, lam3, lam4 = theta[:m], theta[m : 2 * m], theta[2 * m : 2 * m + n], theta[2 * m + n :]
+    #         z = np.exp((E @ (lam2 - lam1) - lam3 + lam4) / kx_ub - 1)
+    #         return z @ kx_ub - lam1 @ (1 - 1 / x_lb) - lam2 @ (1 / x_ub - 1) + lam3 @ z_ub - lam4 @ z_lb
+
+    #     bounds = [(0, None)] * (2 * m + 2 * n)
+    #     theta_start = np.random.uniform(size=2 * m + 2 * n)
+    #     min_problem = minimize(
+    #         _dual_new_ub, theta_start, bounds=bounds, method="SLSQP", options={"maxiter": 1e5, "ftol": 1e-12}
+    #     )
+    #     assert min_problem.success, min_problem
+    #     # theta = min_problem.x
+    #     # lam1, lam2, lam3, lam4 = theta[:m], theta[m : 2 * m], theta[2 * m : 2 * m + n], theta[2 * m + n :]
+    #     # print("lam3: ", lam3)
+    #     # print("lam4: ", lam4)
+    #     return min_problem.fun
 
     # def new_upper_bound(self, cube):
 
