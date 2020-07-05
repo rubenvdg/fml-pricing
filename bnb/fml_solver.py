@@ -1,14 +1,14 @@
 import numpy as np
 from cvxopt import matrix, solvers
+from jax import grad
+from jax import numpy as jnp
 from numpy.linalg import norm
 from scipy.optimize import minimize
-from scipy.special import xlogy
+from scipy.special import xlogy  # pylint: disable-msg=E0611
 
 from .branchandbound import BranchAndBound, Cube
 
 solvers.options["show_progress"] = False
-
-SCALE = 1e5
 
 
 class FMLSolver(BranchAndBound):
@@ -36,7 +36,7 @@ class FMLSolver(BranchAndBound):
     def compute_upper_bound(self, cube: Cube) -> float:
 
         if np.any(cube.center - cube.radius > self.problem.x_ub):
-            # outside [x_lb, x_ub] -> set upper bound low as to not branch
+            # completely outside [x_lb, x_ub] -> set upper bound low to disregard
             cube.objective_lb = 0.0
             return -np.inf
 
@@ -44,106 +44,28 @@ class FMLSolver(BranchAndBound):
         cube_feasible = True if self.lp["status"] == "optimal" else False
 
         if not cube_feasible:
-            # set upper bound low, so that cube is not branched
+            # completely outside X -> set upper bound low to disregard
             cube.objective_lb = 0.0
             return -np.inf
 
-        lipschitz_upper_bound = self.compute_lipschitz_upper_bound(cube)
-        if np.min(cube.center - cube.radius) < 0.10:
-            new_ub = self.new_upper_bound(cube)
-        else:
-            new_ub = np.inf
-
-        return np.min([lipschitz_upper_bound, new_ub])
-
-    def new_upper_bound(self, cube):
-
-        S = np.exp(self.problem.A)
-
-        z_lb = np.exp(-self.problem.p_ub * self.problem.b)
-        z_ub = np.exp(-self.problem.p_lb * self.problem.b)
-
-        z_start = np.asarray(self.lp["x"])[: self.n, 0] / SCALE
-        z_start = np.maximum(z_start, z_lb)
-        z_start = np.minimum(z_start, z_ub)
-
-        x_delta, _ = self._get_x_r_delta(cube)
-
-        x_ub = cube.center + cube.radius + 1e-12
-        x_lb = cube.center - cube.radius - 1e-12
-
-        assert all(x_delta >= x_lb)
-        assert all(x_delta <= x_ub)
-
-        theta_start = np.hstack((x_delta, z_start))
-
-        def cnstr_1(theta, c):
-            z = theta[self.m :]
-            return 1 / x_lb[c] - 1 - S[c] @ z  # >= 0
-
-        def cnstr_2(theta, c):
-            z = theta[self.m :]
-            return 1 + S[c] @ z - 1 / x_ub[c]  # >= 0
-
-        constraints = [
-            {"type": "ineq", "fun": lambda theta, c=c: cnstr_1(theta, c)} for c in range(self.m)
-        ] + [{"type": "ineq", "fun": lambda theta, c=c: cnstr_2(theta, c)} for c in range(self.m)]
-
-        bounds = list(zip(x_lb, x_ub)) + list(zip(z_lb, z_ub))
-
-        CONST = 1e9
-
-        for c in range(self.m):
-            for f in [cnstr_1, cnstr_2]:
-                assert (
-                    f(theta_start, c) >= 0.0
-                ), f"Starting value constraint violated, {f(theta_start, c)} < 0 at {f}"
-        for i in range(self.n):
-            assert z_start[i] <= z_ub[i], f"{i} out of bounds (> z_ub)."
-            assert z_start[i] >= z_lb[i], f"{i} out of bounds ({z_start[i]} < {z_lb[i]})."
-
-        def objective(theta):
-            x, z = theta[: self.m], theta[self.m :]
-            return np.sum(xlogy(z, z) * (self.problem.k @ x)) / CONST
-
-        def jac(theta):
-            x, z = theta[: self.m], theta[self.m :]
-            dfdx = np.asarray([np.sum(xlogy(z, z) * self.problem.k[:, c]) for c in range(self.m)])
-            z_ = np.maximum(z, z_lb)
-            dfdz = (1 + np.log(z_)) * (self.problem.k @ x)
-            return np.hstack((dfdx, dfdz)) / CONST
-
-        opt = minimize(
-            objective,
-            theta_start,
-            bounds=bounds,
-            jac=jac,
-            constraints=constraints,
-            options={"iprint": 99, "maxiter": 10000},
-        )
-
-        assert opt.success, f"opt: {opt}, theta_start: {theta_start}."
-        return -opt.fun * CONST
-
-        # if opt.success:
-        #     return -opt.fun * CONST
-        # else:
-        #     print("WARNING: opt for new bound failed: ", opt)
-        #     return np.inf
+        # new = self.new_upper_bound_dual(cube)
+        lipschitz = self.compute_lipschitz_upper_bound(cube)
+        # print(lipschitz, new)
+        # return np.min([lipschitz, new])
+        return lipschitz
 
     def compute_lipschitz_upper_bound(self, cube):
 
-        # shift cube so that center is feasible, put in function
+        # shift cube so that center is feasible
         x_delta, r_delta = self._get_x_r_delta(cube)
 
+        # if cube not completely in positive orthant, branch it
         if np.any(x_delta - r_delta < 0):
-            # set upper bound high, so that cube will be branched
             cube.objective_lb = 0.0
-            return np.inf
+            return np.inf  # set upper bound high, so that cube will be branched
 
         if cube.theta_start is None:
-            dual_dim = 2 * self.n + self.m
-            cube.theta_start = np.random.uniform(-20.0, -50.0, size=dual_dim)
+            cube.theta_start = np.random.uniform(size=2 * self.n + self.m)
 
         with np.errstate(all="ignore"):
             min_problem = self._minimize_dual(cube, x_delta)
@@ -151,7 +73,17 @@ class FMLSolver(BranchAndBound):
         cube.theta_start = min_problem.x
         cube.objective_lb = min_problem.fun
 
-        dual_dx_norm_ub = self._dual_dx_norm_ub(cube, min_problem)
+        dual_dx_norm_ub = self._dual_dx_norm_ub(min_problem.x, x_delta, r_delta)
+
+        # print(min_problem.fun, x_delta, r_delta, cube.objective_lb + dual_dx_norm_ub * r_delta)
+        # theta = min_problem.x
+        # m, n = self.m, self.n
+        # lam, nu_lb, nu_ub = theta[:m], theta[m : n + m], theta[n + m :]
+        # print("lam: ", lam)
+        # print("nu_lb: ", nu_lb)
+        # print("nu_ub: ", nu_ub)
+        # print("nu_ub: ", nu_ub)
+        # print("")
         return cube.objective_lb + dual_dx_norm_ub * r_delta
 
     def compute_lower_bound(self, cube: Cube) -> float:
@@ -166,79 +98,109 @@ class FMLSolver(BranchAndBound):
         r_delta = self.radius + norm(cube.center - x_delta, ord=np.inf)
         return x_delta, r_delta
 
-    @staticmethod
-    def _dual(theta, E, u, m, n, z_lb, z_ub, kx):
-
-        lam = theta[:m]
-        exp_nu_lb = np.exp(theta[m : n + m])
-        exp_nu_ub = np.exp(theta[n + m :])
-        z = np.exp((E.dot(lam) + exp_nu_ub - exp_nu_lb) / kx - 1)
-
-        return np.inner(kx, z) - np.inner(lam, u) + np.inner(exp_nu_lb, z_lb) - np.inner(exp_nu_ub, z_ub)
-
-    @staticmethod
-    def _dual_gradient(theta, E, u, m, n, z_lb, z_ub, kx):
-        lam = theta[:m]
-        exp_nu_lb = np.exp(theta[m : n + m])
-        exp_nu_ub = np.exp(theta[n + m :])
-        z = np.exp((E.dot(lam) + exp_nu_ub - exp_nu_lb) / kx - 1)
-        return np.hstack([E.T.dot(z) - u, (z_lb - z) * exp_nu_lb, (z - z_ub) * exp_nu_ub,])
-
-    def _dual_dx_norm_ub(self, cube, min_problem):
+    def _dual_dx_norm_ub(self, theta, x, r):
         """ Compute L(x,r) defined in the accompanying paper """
         n, m, E = self.n, self.m, self.problem.E
         x_lb, x_ub = self.problem.x_lb, self.problem.x_ub
-        x, r = cube.center, cube.radius
+        # x, r = cube.center, cube.radius
 
-        lam = min_problem.x[:m]
-        nu_lb = np.exp(min_problem.x[m : n + m])
-        nu_ub = np.exp(min_problem.x[m + n :])
+        lam, nu_lb, nu_ub = theta[:m], theta[m : n + m], theta[n + m :]
 
-        x_ = x + r
-        z_arg = (lam.dot(E.T) - nu_lb + nu_ub) / np.inner(self.problem.k, x_) - 1
-        z = np.exp(z_arg)
+        # z = self.z_tilde(lam, nu_ub, nu_lb, self.problem.k @ x)
+        # assert all(z >= self.z_lb) and all(z <= self.z_ub), (list(zip(z, self.z_lb)), list(zip(z, self.z_ub)))
+
+        log_z = (E @ lam - nu_ub + nu_lb) / (self.problem.k @ (x + r)) - 1
         i = lam / (
             (lam > 0) * np.square(np.maximum(x_lb, x - r)) + (lam < 0) * np.square(np.minimum(x_ub, x + r))
-        ) - self.problem.w * E.T.dot(z * z_arg / self.problem.b)
+        ) - self.problem.w * ((np.exp(log_z) * log_z / self.problem.b) @ E)
 
-        x_ = x - r
-        z_arg = (lam.dot(E.T) - nu_lb + nu_ub) / np.inner(self.problem.k, x_) - 1
-        z = np.exp(z_arg)
-        ii = self.problem.w * E.T.dot(z * z_arg / self.problem.b) - lam / (
-            (lam > 0) * np.square(np.minimum(x_lb, x + r)) + (lam < 0) * np.square(np.maximum(x_ub, x - r))
-        )
+        log_z = (E @ lam - nu_ub + nu_lb) / (self.problem.k @ (x - r)) - 1
+        ii = -lam / (
+            (lam > 0) * np.square(np.minimum(x_ub, x + r)) + (lam < 0) * np.square(np.maximum(x_lb, x - r))
+        ) + self.problem.w * ((np.exp(log_z) * log_z / self.problem.b) @ E)
 
         return np.max([np.max(i), np.max(ii)])
 
-    def _minimize_dual(self, cube, x_delta, tries=500):
+    def _minimize_dual(self, cube, x_delta, tries=10):
 
-        u = (1 - x_delta) / x_delta
-        kx = np.inner(self.problem.k, x_delta)
+        mu = (1 - x_delta) / x_delta
+        kx = self.problem.k @ x_delta
         theta_start = cube.theta_start
-        dual_dim = 2 * self.n + self.m
-        args = (self.problem.E, u, self.m, self.n, self.z_lb, self.z_ub, kx)
 
         for _ in range(tries):
 
             min_problem = minimize(
                 self._dual,
                 theta_start,
-                args=args,
+                args=(mu, kx),
+                bounds=[(None, None)] * self.m + [(0, None)] * 2 * self.n,
                 jac=self._dual_gradient,
-                method="BFGS"
+                method="SLSQP",
+                options={"maxiter": 1e5, "ftol": 1e-12},
             )
 
             if min_problem.success:
                 return min_problem
 
-            theta_start = np.random.uniform(-50.0, -20.0, size=dual_dim)
+            theta_start = np.random.uniform(size=2 * self.n + self.m)
 
         exc = (
-            f"dual optimization failed at cube.center {1 / (1 + u)}"
+            f"dual optimization failed at cube.center {1 / (1 + mu)}"
             f" and self.radius {self.radius}, opt: \n{min_problem}"
             f", x_lb: {self.problem.x_lb}."
         )
+
         raise Exception(exc)
+
+    def _dual(self, theta, mu, kx):
+        n, m = self.n, self.m
+        lam, nu_lb, nu_ub = theta[:m], theta[m : n + m], theta[n + m :]
+        z = self.z_tilde(lam, nu_ub, nu_lb, kx)
+        return kx @ z - lam @ mu - nu_lb @ self.z_lb + nu_ub @ self.z_ub
+
+    def z_tilde(self, lam, nu_ub, nu_lb, kx):
+        return np.exp((self.problem.E @ lam - nu_ub + nu_lb) / kx - 1)
+
+    def _dual_gradient(self, theta, mu, kx):
+        n, m = self.n, self.m
+        lam, nu_lb, nu_ub = theta[:m], theta[m : n + m], theta[n + m :]
+        z = self.z_tilde(lam, nu_ub, nu_lb, kx)
+        grad = np.hstack([z @ self.problem.E - mu, z - self.z_lb, self.z_ub - z])
+        return grad
+
+    def new_upper_bound_dual(self, cube):
+
+        E, k = self.problem.E, self.problem.k
+        n, m = self.n, self.m
+
+        # x_delta, _ = self._get_x_r_delta(cube)
+
+        x_ub = cube.center + cube.radius
+        x_lb = cube.center - cube.radius
+        # x_ub = x_delta
+        # x_lb = x_delta
+
+        z_lb = np.exp(-self.problem.p_ub * self.problem.b)
+        z_ub = np.exp(-self.problem.p_lb * self.problem.b)
+
+        kx_ub = k @ x_ub
+
+        def _dual_new_ub(theta):
+            lam1, lam2, lam3, lam4 = theta[:m], theta[m : 2 * m], theta[2 * m : 2 * m + n], theta[2 * m + n :]
+            z = np.exp((E @ (lam2 - lam1) - lam3 + lam4) / kx_ub - 1)
+            return z @ kx_ub - lam1 @ (1 - 1 / x_lb) - lam2 @ (1 / x_ub - 1) + lam3 @ z_ub - lam4 @ z_lb
+
+        bounds = [(0, None)] * (2 * m + 2 * n)
+        theta_start = np.random.uniform(size=2 * m + 2 * n)
+        min_problem = minimize(
+            _dual_new_ub, theta_start, bounds=bounds, method="SLSQP", options={"maxiter": 1e5, "ftol": 1e-12}
+        )
+        assert min_problem.success, min_problem
+        # theta = min_problem.x
+        # lam1, lam2, lam3, lam4 = theta[:m], theta[m : 2 * m], theta[2 * m : 2 * m + n], theta[2 * m + n :]
+        # print("lam3: ", lam3)
+        # print("lam4: ", lam4)
+        return min_problem.fun
 
     def _solve_lp(self, cube):
 
@@ -267,20 +229,20 @@ class FMLSolver(BranchAndBound):
         n, m, E = self.n, self.m, self.problem.E
 
         c = matrix(np.hstack([np.zeros(n + 2 * m), np.ones(1)]))
-        A_eq = matrix(np.hstack([E.T / SCALE, np.identity(m), -np.identity(m), np.zeros((m, 1))]))
+        A_eq = matrix(np.hstack([E.T, np.identity(m), -np.identity(m), np.zeros((m, 1))]))
 
         b_ub_1 = np.zeros(m)
-        b_ub_2 = -self.z_lb * SCALE
+        b_ub_2 = -self.z_lb
         b_ub_3 = np.zeros(m)
-        b_ub_4 = self.z_ub * SCALE
+        b_ub_4 = self.z_ub
         b_ub_5 = np.zeros(m)
 
         b_ub = matrix(np.hstack([b_ub_1, b_ub_2, b_ub_3, b_ub_4, b_ub_5]))
 
         A_ub_1 = np.hstack([np.zeros((m, n)), np.identity(m), np.identity(m), -np.ones((m, 1))])
-        A_ub_2 = np.hstack([-np.identity(n), np.zeros((n, m)), np.zeros((n, m)), np.zeros((n, 1))])  # z
+        A_ub_2 = np.hstack([-np.identity(n), np.zeros((n, m)), np.zeros((n, m)), np.zeros((n, 1))])
         A_ub_3 = np.hstack([np.zeros((m, n)), -np.identity(m), np.zeros((m, m)), np.zeros((m, 1))])
-        A_ub_4 = np.hstack([np.identity(n), np.zeros((n, m)), np.zeros((n, m)), np.zeros((n, 1))])  # z
+        A_ub_4 = np.hstack([np.identity(n), np.zeros((n, m)), np.zeros((n, m)), np.zeros((n, 1))])
         A_ub_5 = np.hstack([np.zeros((m, n)), np.zeros((m, m)), -np.identity(m), np.zeros((m, 1))])
         A_ub_6 = np.hstack([np.zeros((m, n)), np.identity(m), np.zeros((m, m)), np.zeros((m, 1))])
         A_ub_7 = np.hstack([np.zeros((m, n)), np.zeros((m, m)), np.identity(m), np.zeros((m, 1))])

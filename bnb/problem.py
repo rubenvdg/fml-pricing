@@ -72,4 +72,3 @@ class Segment:
 
     def revenue(self, q):
         return np.sum(self.a / self.b * q) + np.sum(q / self.b) * np.log(1 - np.sum(q)) - np.sum(q / self.b * np.log(q))
-

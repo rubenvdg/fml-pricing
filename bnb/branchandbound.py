@@ -28,10 +28,9 @@ class BranchAndBound:
         self.multiprocess = multiprocess
 
         lower_bound, upper_bound = bounds
-        dim = len(lower_bound)
         self.radius = np.max(upper_bound - lower_bound) / 2
         self.cubes = [Cube(lower_bound + self.radius, self.radius)]
-        self.omega = [np.asarray(arr) for arr in product([-1, 1], repeat=dim)]
+        self.omega = [np.asarray(arr) for arr in product([-1, 1], repeat=len(lower_bound))]
 
         self.objective_ub = np.inf
         self.objective_lb = - np.inf
@@ -50,6 +49,13 @@ class BranchAndBound:
             self.radius /= 2
             self.branch()
             self.bound()
+            # for cube in self.cubes:
+            #     print(cube.center)
+            #     print(cube.objective_lb)
+            #     print(cube.objective_ub)
+            #     print("")
+            # if self.iter == 2:
+                # assert False
 
         self.timer = time.time() - t0
 
@@ -62,8 +68,6 @@ class BranchAndBound:
             self.exit_msg = f"Opt_gap = {self.opt_gap()} (< epsilon)."
             if self.opt_gap() < 0:
                 print(f"WARNING: opt_gap < 0. LB: {self.objective_lb}, UB: {self.objective_ub}.")
-            # print("opt gap: ", self.opt_gap())
-            # print(f"Optimum: {self.objective_lb}")
             return True
         return False
 
