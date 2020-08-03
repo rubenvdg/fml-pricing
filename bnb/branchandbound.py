@@ -4,6 +4,7 @@ from itertools import product
 from multiprocessing import Pool
 
 import numpy as np
+from tqdm import tqdm
 
 
 class Cube:
@@ -68,7 +69,7 @@ class BranchAndBound:
 
         # bound each cube
         if self.multiprocess:
-            with Pool() as pool:
+            with Pool(6) as pool:
                 self.cubes = [
                     cube
                     for cubes in pool.map(
@@ -95,7 +96,10 @@ class BranchAndBound:
         return cube
 
     def _bound_cubes(self, cubes):
-        return [self._bound_cube(cube) for cube in cubes]
+        out = []
+        for cube in cubes:
+            out.append(self._bound_cube(cube))
+        return out
 
     def branch(self):
         self.cubes = [

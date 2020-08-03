@@ -7,11 +7,14 @@ from itertools import product
 from pathlib import Path
 from shutil import copyfile
 
+import warnings
+
 import numpy as np
 import pandas as pd
 import scipy.stats as st
 from tqdm import tqdm
-
+from time import time
+import logging
 from bnb.fml_solver import FMLSolver
 from bnb.naivesolver import NaiveSolver
 from bnb.problem import OptimizationProblem
@@ -23,6 +26,7 @@ from gradient_descent import GradientDescent
 def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, multiprocess=True):
 
     seed = 0
+    t0 = time()
 
     with open(output_path, "w", newline="") as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=",")
@@ -30,8 +34,10 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
         csvwriter.writerow(columns)
 
     for _, m, n in tqdm(list(product(range(reps), m_range, n_range))):
+        print(f"n: {n}, m: {m}")
 
         seed += 1
+        print("seed: ", seed)
         np.random.seed(seed)
 
         # sample random parameters
@@ -42,6 +48,7 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
 
         problem = OptimizationProblem(a, b, w)
         solver = Solver(problem, multiprocess=multiprocess, epsilon=0.01)
+        print("x_lb: ", problem.x_lb)
         solver.solve()
         gd = GradientDescent(a, b, w)
         gd_sol = gd.solve()
@@ -68,18 +75,19 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
             csvwriter.writerow(new_line)
 
     copyfile(output_path, output_path.parent.joinpath("_lastrun.csv"))
-
+    print("time elapsed: ", time() - t0)
 
 if __name__ == "__main__":
 
-    a_range = (0.0, 4.0)
+    logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
+
+    a_range = (0.0, 6.0)
     b_range = (0.001, 0.01)
-    n_range = [10, 20, 30, 40, 50]
-    # n_range = [10, 30, 50]
-    m_range = [1, 2, 3, 4]
-    # n_range = [20]
-    # m_range = [3]
-    reps = 5
+    # n_range = [10, 20, 30, 40, 50]
+    # m_range = [1, 2, 3, 4]
+    n_range = [10]
+    m_range = [4]
+    reps = 1
 
     file_name = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv"
     output_path = Path("sim_results", file_name)

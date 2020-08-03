@@ -22,6 +22,7 @@ class OptimizationProblem:
         for segment in self.segments:
             segment.x_lb = segment.no_purchase_probability(self.p_lb)
             segment.x_ub = segment.no_purchase_probability(self.p_ub)
+
         self.x_lb = np.asarray([segment.x_lb for segment in self.segments])
         self.x_ub = np.asarray([segment.x_ub for segment in self.segments])
 
