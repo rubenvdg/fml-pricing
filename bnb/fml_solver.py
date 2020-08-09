@@ -66,6 +66,7 @@ class FMLSolver(BranchAndBound):
         # logger = logging.getLogger(__name__)
         # shift cube so that center is feasible
         x_delta, r_delta = self._get_x_r_delta(cube)
+        # print(f"x: {cube.center}, x_lower: {cube.center - cube.radius}, x_delta: {x_delta}.")
 
         with np.errstate(over="ignore"):  # suppress overflows during optimization
             min_problem = self._minimize_dual_lipschitz_bound(cube, x_delta)
@@ -292,8 +293,7 @@ class FMLSolver(BranchAndBound):
         b_ub = matrix(np.hstack([b_ub_1, b_ub_2, b_ub_3, b_ub_4, b_ub_5]))
 
         # gamma >= delta^+ + delta^-
-        A_ub_1 = np.hstack([np.zeros((m, n)), np.zeros((m, m)), np.identity(m), -np.ones((m, 1))])
-        # A_ub_1 = np.hstack([np.zeros((m, n)), np.identity(m), np.identity(m), -np.ones((m, 1))])
+        A_ub_1 = np.hstack([np.zeros((m, n)), np.identity(m), np.identity(m), -np.ones((m, 1))])
         A_ub_2 = np.hstack([-np.identity(n), np.zeros((n, m)), np.zeros((n, m)), np.zeros((n, 1))])
         A_ub_3 = np.hstack([np.zeros((m, n)), -np.identity(m), np.zeros((m, m)), np.zeros((m, 1))])
         A_ub_4 = np.hstack([np.identity(n), np.zeros((n, m)), np.zeros((n, m)), np.zeros((n, 1))])

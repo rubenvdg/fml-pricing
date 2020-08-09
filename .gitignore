@@ -1,6 +1,6 @@
 *.csv
 *.pdf
-
+*.parquet
 *.xlsx
 *.xls
 

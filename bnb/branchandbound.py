@@ -69,7 +69,7 @@ class BranchAndBound:
 
         # bound each cube
         if self.multiprocess:
-            with Pool(6) as pool:
+            with Pool() as pool:
                 self.cubes = [
                     cube
                     for cubes in pool.map(

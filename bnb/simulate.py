@@ -74,6 +74,17 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
             ]
             csvwriter.writerow(new_line)
 
+        df = pd.DataFrame({
+            "x.radius": [cube.radius for cube in solver.cubes],
+            "x.lb": [cube.objective_lb for cube in solver.cubes],
+            "x.ub": [cube.objective_ub for cube in solver.cubes],
+        })
+
+        for c in range(m):
+            df[f"x_{c}"] = [cube.center[c] for cube in solver.cubes]
+
+        df.to_parquet("results.parquet")
+
     copyfile(output_path, output_path.parent.joinpath("_lastrun.csv"))
     print("time elapsed: ", time() - t0)
 
@@ -81,9 +92,9 @@ if __name__ == "__main__":
 
     logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
 
-    a_range = (0.0, 6.0)
+    a_range = (0.0, 4.0)
     b_range = (0.001, 0.01)
-    # n_range = [10, 20, 30, 40, 50]
+    n_range = [10, 20, 30, 40, 50]
     # m_range = [1, 2, 3, 4]
     n_range = [10]
     m_range = [4]
