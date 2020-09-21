@@ -29,9 +29,9 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
 
         seed += 1
         print(f"n: {n}, m: {m}, seed: {seed}.")
-        np.random.seed(seed)
 
         # sample random parameters
+        np.random.seed(seed)
         w = np.random.uniform(0, 1, size=m)
         w /= np.sum(w)
         a = [np.random.uniform(*a_range, size=n) for _ in range(m)]
@@ -42,7 +42,7 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
         solver.solve()
         gd = GradientDescent(a, b, w)
         gd_sol = gd.solve()
-        print("gs solution: ", gd_sol)
+        print("gradient descent solution: ", gd_sol)
         print("time elapsed: ", solver.timer)
 
         with open(output_path, "a", newline="") as csvfile:
@@ -53,19 +53,9 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
             new_line = [str(n), str(m), str(seed), cpu_time, iters, solver_name, json.dumps(par), solver.objective_lb, solver.objective_ub, gd_sol]
             csvwriter.writerow(new_line)
 
-        # df = pd.DataFrame({
-        #     "x.radius": [cube.radius for cube in solver.cubes],
-        #     "x.lb": [cube.objective_lb for cube in solver.cubes],
-        #     "x.ub": [cube.objective_ub for cube in solver.cubes],
-        # })
-
-        # for c in range(m):
-        #     df[f"x_{c}"] = [cube.center[c] for cube in solver.cubes]
-
-        # df.to_parquet("results.parquet")
-
     copyfile(output_path, output_path.parent.joinpath("_lastrun.csv"))
     print("time elapsed: ", time() - t0)
+
 
 if __name__ == "__main__":
 
@@ -73,11 +63,11 @@ if __name__ == "__main__":
 
     a_range = (0.0, 8.0)
     b_range = (0.001, 0.01)
-    n_range = [10, 20, 30, 40, 50]
-    m_range = [1, 2, 3, 4]
-    # n_range = [30]
-    # m_range = [4]
-    reps = 10
+    # n_range = [10, 20, 30, 40, 50]
+    # m_range = [1, 2, 3, 4]
+    n_range = [30]
+    m_range = [4]
+    reps = 1
 
     file_name = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv"
     output_path = Path("sim_results", file_name)
