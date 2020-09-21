@@ -1,8 +1,9 @@
 *.csv
 *.pdf
-
+*.parquet
 *.xlsx
 *.xls
+notebooks_private/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

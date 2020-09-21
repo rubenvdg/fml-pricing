@@ -1,12 +1,14 @@
-from itertools import product
 import logging
-from multiprocessing import Pool
 import time
+from itertools import product
+from multiprocessing import Pool
+
 import numpy as np
+from tqdm import tqdm
 
 
 class Cube:
-    ''' Represents a hypercube during optimization '''
+    """ Represents a hypercube during optimization """
 
     def __init__(self, center, radius, theta_start=None):
         self.center = center
@@ -19,21 +21,21 @@ class Cube:
 
 
 class BranchAndBound:
-
     def __init__(self, bounds, epsilon=0.01, multiprocess=True):
-        
+
         self.epsilon = epsilon
         self.iter = 0
         self.multiprocess = multiprocess
-        
+
         lower_bound, upper_bound = bounds
-        dim = len(lower_bound)
         self.radius = np.max(upper_bound - lower_bound) / 2
         self.cubes = [Cube(lower_bound + self.radius, self.radius)]
-        self.omega = [np.asarray(arr) for arr in product([-1, 1], repeat=dim)]
+        self.omega = [
+            np.asarray(arr) for arr in product([-1, 1], repeat=len(lower_bound))
+        ]
 
         self.objective_ub = np.inf
-        self.objective_lb = - np.inf
+        self.objective_lb = -np.inf
         self.timer = None
 
     def compute_lower_bound(self, cube):
@@ -49,32 +51,36 @@ class BranchAndBound:
             self.radius /= 2
             self.branch()
             self.bound()
-        
+
         self.timer = time.time() - t0
 
     def opt_gap(self):
         return 1 - self.objective_lb / self.objective_ub
 
     def converged(self):
+        print(f"LB: {self.objective_lb}, UB: {self.objective_ub}.")
         if self.opt_gap() < self.epsilon:
             self.exit_msg = f"Opt_gap = {self.opt_gap()} (< epsilon)."
+            if self.opt_gap() < 0:
+                print(
+                    f"WARNING: opt_gap < 0. LB: {self.objective_lb}, UB: {self.objective_ub}."
+                )
             return True
         return False
 
     def bound(self):
-        
+
         # bound each cube
         if self.multiprocess:
             with Pool() as pool:
                 self.cubes = [
                     cube
                     for cubes in pool.map(
-                        self._bound_cubes,
-                        np.array_split(self.cubes, pool._processes)
+                        self._bound_cubes, np.array_split(self.cubes, pool._processes)
                     )
                     for cube in cubes
                 ]
-        else: 
+        else:
             self.cubes = self._bound_cubes(self.cubes)
 
         # update bounds
@@ -85,21 +91,27 @@ class BranchAndBound:
         for cube in self.cubes:
             if cube.objective_ub < self.objective_lb:
                 cube.branch = False
-    
+
     def _bound_cube(self, cube):
         cube.objective_ub = self.compute_upper_bound(cube)
         cube.objective_lb = self.compute_lower_bound(cube)
         return cube
-    
+
     def _bound_cubes(self, cubes):
-        return [self._bound_cube(cube) for cube in cubes]
+        out = []
+        for cube in cubes:
+            out.append(self._bound_cube(cube))
+        return out
 
     def branch(self):
         self.cubes = [
             Cube(
                 cube.center + omega * self.radius,
                 self.radius,
-                theta_start=cube.theta_start
+                theta_start=cube.theta_start,
             )
-            for omega in self.omega for cube in self.cubes if cube.branch
+            for omega in self.omega
+            for cube in self.cubes
+            if cube.branch
         ]
+        print("number of cubes: ", len(self.cubes))
