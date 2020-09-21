@@ -1,26 +1,18 @@
 import csv
 import datetime
 import json
-import os
-import warnings
+import logging
 from itertools import product
 from pathlib import Path
 from shutil import copyfile
-
-import warnings
+from time import time
 
 import numpy as np
-import pandas as pd
-import scipy.stats as st
 from tqdm import tqdm
-from time import time
-import logging
-from bnb.fml_solver import FMLSolver
-from bnb.naivesolver import NaiveSolver
-from bnb.problem import OptimizationProblem
-from gradient_descent import GradientDescent
 
-# warnings.filterwarnings("error")
+from bnb.fml_solver import FMLSolver
+from bnb.gradient_descent import GradientDescent
+from bnb.problem import OptimizationProblem
 
 
 def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, multiprocess=True):
@@ -34,10 +26,9 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
         csvwriter.writerow(columns)
 
     for _, m, n in tqdm(list(product(range(reps), m_range, n_range))):
-        print(f"n: {n}, m: {m}")
 
         seed += 1
-        print("seed: ", seed)
+        print(f"n: {n}, m: {m}, seed: {seed}.")
         np.random.seed(seed)
 
         # sample random parameters
@@ -45,10 +36,9 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
         w /= np.sum(w)
         a = [np.random.uniform(*a_range, size=n) for _ in range(m)]
         b = np.random.uniform(*b_range, size=n)
-
         problem = OptimizationProblem(a, b, w)
         solver = Solver(problem, multiprocess=multiprocess, epsilon=0.01)
-        print("x_lb: ", problem.x_lb)
+
         solver.solve()
         gd = GradientDescent(a, b, w)
         gd_sol = gd.solve()
@@ -60,30 +50,19 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
             cpu_time, iters = str(solver.timer), str(solver.iter)
             par = {"a": list(map(list, a)), "b": b.tolist(), "w": w.tolist()}
             solver_name = Solver.__name__
-            new_line = [
-                str(n),
-                str(m),
-                str(seed),
-                cpu_time,
-                iters,
-                solver_name,
-                json.dumps(par),
-                solver.objective_lb,
-                solver.objective_ub,
-                gd_sol,
-            ]
+            new_line = [str(n), str(m), str(seed), cpu_time, iters, solver_name, json.dumps(par), solver.objective_lb, solver.objective_ub, gd_sol]
             csvwriter.writerow(new_line)
 
-        df = pd.DataFrame({
-            "x.radius": [cube.radius for cube in solver.cubes],
-            "x.lb": [cube.objective_lb for cube in solver.cubes],
-            "x.ub": [cube.objective_ub for cube in solver.cubes],
-        })
+        # df = pd.DataFrame({
+        #     "x.radius": [cube.radius for cube in solver.cubes],
+        #     "x.lb": [cube.objective_lb for cube in solver.cubes],
+        #     "x.ub": [cube.objective_ub for cube in solver.cubes],
+        # })
 
-        for c in range(m):
-            df[f"x_{c}"] = [cube.center[c] for cube in solver.cubes]
+        # for c in range(m):
+        #     df[f"x_{c}"] = [cube.center[c] for cube in solver.cubes]
 
-        df.to_parquet("results.parquet")
+        # df.to_parquet("results.parquet")
 
     copyfile(output_path, output_path.parent.joinpath("_lastrun.csv"))
     print("time elapsed: ", time() - t0)
@@ -92,24 +71,15 @@ if __name__ == "__main__":
 
     logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
 
-    a_range = (0.0, 4.0)
+    a_range = (0.0, 8.0)
     b_range = (0.001, 0.01)
     n_range = [10, 20, 30, 40, 50]
-    # m_range = [1, 2, 3, 4]
-    n_range = [10]
-    m_range = [4]
-    reps = 1
+    m_range = [1, 2, 3, 4]
+    # n_range = [30]
+    # m_range = [4]
+    reps = 10
 
     file_name = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv"
     output_path = Path("sim_results", file_name)
 
-    simulate(
-        output_path=output_path,
-        reps=reps,
-        Solver=FMLSolver,
-        a_range=a_range,
-        b_range=b_range,
-        n_range=n_range,
-        m_range=m_range,
-        multiprocess=True,
-    )
+    simulate(output_path, reps, FMLSolver, a_range, b_range, n_range, m_range, multiprocess=True)

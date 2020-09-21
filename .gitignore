@@ -3,6 +3,7 @@
 *.parquet
 *.xlsx
 *.xls
+notebooks/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

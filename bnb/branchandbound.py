@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 
 class Cube:
-    ''' Represents a hypercube during optimization '''
+    """ Represents a hypercube during optimization """
 
     def __init__(self, center, radius, theta_start=None):
         self.center = center
@@ -21,7 +21,6 @@ class Cube:
 
 
 class BranchAndBound:
-
     def __init__(self, bounds, epsilon=0.01, multiprocess=True):
 
         self.epsilon = epsilon
@@ -31,10 +30,12 @@ class BranchAndBound:
         lower_bound, upper_bound = bounds
         self.radius = np.max(upper_bound - lower_bound) / 2
         self.cubes = [Cube(lower_bound + self.radius, self.radius)]
-        self.omega = [np.asarray(arr) for arr in product([-1, 1], repeat=len(lower_bound))]
+        self.omega = [
+            np.asarray(arr) for arr in product([-1, 1], repeat=len(lower_bound))
+        ]
 
         self.objective_ub = np.inf
-        self.objective_lb = - np.inf
+        self.objective_lb = -np.inf
         self.timer = None
 
     def compute_lower_bound(self, cube):
@@ -50,6 +51,12 @@ class BranchAndBound:
             self.radius /= 2
             self.branch()
             self.bound()
+            # print("\n", self.iter)
+            # for cube in self.cubes:
+            # print(cube.objective_lb, cube.objective_ub)
+            # pass
+            # if self.iter == 4:
+            # assert False
 
         self.timer = time.time() - t0
 
@@ -61,7 +68,9 @@ class BranchAndBound:
         if self.opt_gap() < self.epsilon:
             self.exit_msg = f"Opt_gap = {self.opt_gap()} (< epsilon)."
             if self.opt_gap() < 0:
-                print(f"WARNING: opt_gap < 0. LB: {self.objective_lb}, UB: {self.objective_ub}.")
+                print(
+                    f"WARNING: opt_gap < 0. LB: {self.objective_lb}, UB: {self.objective_ub}."
+                )
             return True
         return False
 
@@ -73,8 +82,7 @@ class BranchAndBound:
                 self.cubes = [
                     cube
                     for cubes in pool.map(
-                        self._bound_cubes,
-                        np.array_split(self.cubes, pool._processes)
+                        self._bound_cubes, np.array_split(self.cubes, pool._processes)
                     )
                     for cube in cubes
                 ]
@@ -106,8 +114,10 @@ class BranchAndBound:
             Cube(
                 cube.center + omega * self.radius,
                 self.radius,
-                theta_start=cube.theta_start
+                theta_start=cube.theta_start,
             )
-            for omega in self.omega for cube in self.cubes if cube.branch
+            for omega in self.omega
+            for cube in self.cubes
+            if cube.branch
         ]
         print("number of cubes: ", len(self.cubes))
