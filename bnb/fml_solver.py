@@ -55,6 +55,7 @@ class FMLSolver(BranchAndBound):
 
         # Compute bounds
         lipschitz_bound = self.compute_lipschitz_upper_bound(cube, x_delta, r_delta)
+        return lipschitz_bound
         alternative_bound = self.compute_alternative_bound(cube, x_delta, r_delta)
 
         return np.min([lipschitz_bound, alternative_bound])
