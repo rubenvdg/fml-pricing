@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.optimize import root
-import numpy as np
 
 np.set_printoptions(precision=4, suppress=True)
 
