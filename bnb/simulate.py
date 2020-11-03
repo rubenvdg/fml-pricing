@@ -94,10 +94,10 @@ if __name__ == "__main__":
 
     a_range = (0.0, 7.0)
     b_range = (0.001, 0.01)
-    n_range = [10, 20, 30, 40, 50]
-    m_range = [1, 2, 3, 4]
-    # n_range = [30]
-    # m_range = [4]
+    # n_range = [10, 20, 30, 40, 50]
+    # m_range = [1, 2, 3, 4]
+    n_range = [30]
+    m_range = [4]
     reps = 5
 
     file_name = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv"
