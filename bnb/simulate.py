@@ -92,7 +92,7 @@ if __name__ == "__main__":
 
     logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
 
-    a_range = (0.0, 7.0)
+    a_range = (0.0, 4.0)
     b_range = (0.001, 0.01)
     # n_range = [10, 20, 30, 40, 50]
     # m_range = [1, 2, 3, 4]
