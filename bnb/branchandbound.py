@@ -8,14 +8,14 @@ import numpy as np
 class Cube:
     """ Represents a hypercube during optimization """
 
-    def __init__(self, center, radius, theta_start=None):
+    def __init__(self, center, radius, lam_start=None):
         self.center = center
         self.radius = radius
         self.branch = True
         self.objective_ub = None
         self.objective_lb = None
         self.objective_lower_bound_x = None
-        self.theta_start = theta_start
+        self.lam_start = lam_start
 
 
 class BranchAndBound:
@@ -94,7 +94,7 @@ class BranchAndBound:
             Cube(
                 cube.center + omega * self.radius,
                 self.radius,
-                theta_start=cube.theta_start,
+                lam_start=cube.lam_start,
             )
             for omega in self.omega
             for cube in self.cubes

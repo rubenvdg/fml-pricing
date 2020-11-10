@@ -18,32 +18,17 @@ EPS = 0.01
 
 
 def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, multiprocess=True):
+    logger = logging.getLogger(__name__)
 
     seed = 0
     t0 = time()
-
-    with open(output_path, "w", newline="") as csvfile:
-        csvwriter = csv.writer(csvfile, delimiter=",")
-        columns = [
-            "n",
-            "m",
-            "seed",
-            "cputime",
-            "iterations",
-            "solver",
-            "par",
-            "lb",
-            "ub",
-            "gd_sol",
-        ]
-        csvwriter.writerow(columns)
+    _make_new_file(output_path)
 
     for _, m, n in tqdm(list(product(range(reps), m_range, n_range))):
 
         seed += 1
-        # seed = 8
 
-        print(f"n: {n}, m: {m}, seed: {seed}.")
+        logger.info("n: %s, m: %s seed: %s.", n, m, seed)
 
         # sample random parameters
         np.random.seed(seed)
@@ -53,51 +38,76 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
         b = np.random.uniform(*b_range, size=n)
         problem = OptimizationProblem(a, b, w)
 
+        # solve with gradient descent
         gd = GradientDescent(a, b, w)
         gd_sol = gd.solve()
-        print("gradient descent solution: ", gd_sol)
+        logger.info("gradient descent solution: %s", gd_sol)
 
+        # solve with our solver
         solver = Solver(problem, objective_lb=gd_sol, multiprocess=multiprocess, epsilon=EPS)
         solver.solve()
-
-        print("time elapsed: ", solver.timer)
+        logger.info("time elapsed: %s", solver.timer)
 
         if gd_sol / solver.objective_lb > (1 + EPS):
             raise ValueError("Suboptimal solution.")
 
-        with open(output_path, "a", newline="") as csvfile:
-            csvwriter = csv.writer(csvfile, delimiter=",", quotechar="'")
-            cpu_time, iters = str(solver.timer), str(solver.iter)
-            par = {"a": list(map(list, a)), "b": b.tolist(), "w": w.tolist()}
-            solver_name = Solver.__name__
-            new_line = [
-                str(n),
-                str(m),
+        # persist results
+        _write_new_line(output_path, solver, seed, gd_sol)
+
+    copyfile(output_path, output_path.parent.joinpath("_lastrun.csv"))
+    logger.info("total time elapsed: %s", time() - t0)
+
+
+def _make_new_file(output_path):
+
+    with open(output_path, "w", newline="") as csvfile:
+        csvwriter = csv.writer(csvfile, delimiter=",")
+        csvwriter.writerow(
+            [
+                "n",
+                "m",
+                "seed",
+                "cputime",
+                "iterations",
+                "solver",
+                "par",
+                "lb",
+                "ub",
+                "gd_sol",
+            ]
+        )
+
+
+def _write_new_line(output_path, solver, seed, gd_sol):
+    par = {"a": list(map(list, solver.problem.A)), "b": solver.problem.b.tolist(), "w": solver.problem.w.tolist()}
+    with open(output_path, "a", newline="") as csvfile:
+        csvwriter = csv.writer(csvfile, delimiter=",", quotechar="'")
+        csvwriter.writerow(
+            [
+                str(solver.problem.n),
+                str(solver.problem.m),
                 str(seed),
-                cpu_time,
-                iters,
-                solver_name,
+                str(solver.timer),
+                str(solver.iter),
+                solver.__class__,
                 json.dumps(par),
                 solver.objective_lb,
                 solver.objective_ub,
                 gd_sol,
             ]
-            csvwriter.writerow(new_line)
-
-    copyfile(output_path, output_path.parent.joinpath("_lastrun.csv"))
-    print("time elapsed: ", time() - t0)
+        )
 
 
 if __name__ == "__main__":
 
     logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
 
-    a_range = (0.0, 4.0)
+    a_range = (0.0, 7.0)
     b_range = (0.001, 0.01)
     # n_range = [10, 20, 30, 40, 50]
     # m_range = [1, 2, 3, 4]
     n_range = [30]
-    m_range = [4]
+    m_range = [3]
     reps = 5
 
     file_name = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv"
