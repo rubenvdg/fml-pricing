@@ -1,5 +1,4 @@
 numpy==1.14.5
 scipy==1.1.0
 cvxopt==1.2.3
-numdifftools==0.9.39
 tqdm==4.36.1

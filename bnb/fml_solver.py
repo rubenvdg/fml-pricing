@@ -7,7 +7,11 @@ import logging
 from .branchandbound import BranchAndBound, Cube
 
 solvers.options["show_progress"] = False
-CNST = 1e8
+
+# CNST = 1e6  # for normalization of optimization problem
+TOL = None  # relative tolerance for optimization algorithms
+SOLVER_OPTIONS = {"maxiter": int(1e6)}
+SAMPLE_RANGE = (-50, -20)  # for sampling starting values of the dual optimization problem
 
 
 class FMLSolver(BranchAndBound):
@@ -34,7 +38,7 @@ class FMLSolver(BranchAndBound):
     def compute_upper_bound(self, cube: Cube) -> float:
 
         if np.any(cube.center - cube.radius > self.problem.x_ub):
-            # completely outside X -> set upper bound low to disregard
+            # Cube completely outside X -> set upper bound low to disregard
             cube.objective_lb = 0.0
             return -np.inf
 
@@ -42,64 +46,78 @@ class FMLSolver(BranchAndBound):
         cube_feasible = True if self.lp["status"] == "optimal" else False
 
         if not cube_feasible:
-            # completely outside X -> set upper bound low to disregard
+            # Cube completely outside X -> set upper bound low to disregard
             cube.objective_lb = 0.0
             return -np.inf
 
         # Shift cube such that center is feasible
         x_delta, r_delta = self._get_x_r_delta(cube)
+
+        # Compute bounds
         lipschitz_bound = self.compute_lipschitz_upper_bound(cube, x_delta, r_delta)
         alternative_bound = self.compute_alternative_bound(cube, x_delta, r_delta)
-
         return np.min([lipschitz_bound, alternative_bound])
 
     def compute_alternative_bound(self, cube, x_delta, r_delta):
+
         logger = logging.getLogger(__name__)
-        try:
-            opt = self._compute_alternative_bound(x_delta, r_delta, cube)
-            ub = -opt.fun * CNST
-            if opt.success and ub > cube.objective_lb:
-                return ub
-            logger.warning("Optimization failed, setting upper bound to inf.")
+        opt, cnst = self._compute_alternative_bound(x_delta, r_delta, cube)
+        ub = -opt.fun * cnst
+
+        if not opt.success:
+            logger.warning("Optimization failed (no convergence): %s.", opt.message)
             return np.inf
-        except Exception as ex:
-            logger.warning("Optimization failed, setting upper bound to inf (exc: %s).", ex)
-            return np.inf
+
+        return ub
 
     def _compute_alternative_bound(self, x, r, cube):
 
         n, m, problem = self.n, self.m, self.problem
 
-        def obj(xi):
+        def obj(xi, cnst):
             xi_ = xi.reshape((n, m))
-            obj_ = np.sum((xlogy(xi_, xi_ / (x + r)) * problem.S * problem.w).T / problem.b) / CNST
+            obj_ = np.sum((xlogy(xi_, xi_ / (x + r)) * problem.S * problem.w).T / problem.b) / cnst
             jac_ = np.where(
                 xi_ > 0,
-                (((1 + np.log(xi_ / (x + r))) * problem.S * problem.w).T / problem.b).T,
-                np.zeros((n, m)) - 100 * CNST,
-            ).reshape((n * m, )) / CNST
+                (((1 + np.log(xi_ / (x + r))) * problem.S * problem.w).T / problem.b).T / cnst,
+                -np.ones((n, m)),
+            ).reshape((n * m,))
             return obj_, jac_
 
-        bounds = (np.ones((n, m)) * np.exp(-1) * (x + r)).reshape((n * m,))
-        bounds = [(0, ub) for ub in bounds]
+        # ub = (np.ones((n, m)) * np.exp(-1) * (x + r)).reshape((n * m,))
+        # ub = (np.ones((n, m)) * np.exp(-1) * np.minimum(x + r, self.problem.x_ub)).reshape((n * m,))
+        ub = np.outer(self.z_ub, np.minimum(x + r, self.problem.x_ub)).reshape((n * m,))
+        bounds = [(0, ub_) for ub_ in ub]
 
         def cnstr(xi):
             xi_ = xi.reshape((n, m))
             S_xi = np.sum(problem.S * xi_, axis=0)
-            return np.hstack([S_xi - (1 - x - r), 1 - x + r - S_xi])
+            return np.hstack(
+                [
+                    S_xi - np.maximum(1 - x - r, 1 - self.problem.x_ub),
+                    np.minimum(1 - x + r, 1 - self.problem.x_lb) - S_xi,  #
+                ]
+            )
+            # return np.hstack([S_xi - (1 - x - r), 1 - x + r - S_xi])
 
         cnstrs = [{"type": "ineq", "fun": cnstr}]
         xi_start = np.outer(cube.z_opt, x)
+        # cnst = np.linalg.norm(obj(xi_start, 1.0)[1])
+        cnst = 1e9
 
         with np.errstate(all="ignore"):  # suppress overflows during optimization
-            return minimize(obj, xi_start, bounds=bounds, constraints=cnstrs, jac=True, options={"maxiter": int(1e3), "ftol": 1e-1})
+            opt = minimize(
+                obj, xi_start, args=(cnst,), bounds=bounds, constraints=cnstrs, options=SOLVER_OPTIONS, jac=True
+            )
+
+        return opt, cnst
 
     def compute_lipschitz_upper_bound(self, cube, x_delta, r_delta):
 
         with np.errstate(all="ignore"):  # suppress overflows during optimization
             min_problem = self._minimize_dual_lipschitz_bound(cube, x_delta)
 
-        cube.theta_start = min_problem.x
+        cube.lam_start = min_problem.x
         cube.objective_lb = min_problem.fun
 
         with np.errstate(all="ignore"):
@@ -118,32 +136,30 @@ class FMLSolver(BranchAndBound):
         r_delta = cube.radius + norm(cube.center - x_delta, ord=np.inf)
         return x_delta, r_delta
 
-    def _minimize_dual_lipschitz_bound(self, cube, x_delta, tries=200):
+    def _minimize_dual_lipschitz_bound(self, cube, x_delta, tries=1000):
 
         mu = (1 - x_delta) / x_delta
         kx = self.k @ x_delta
-        m, n = self.m, self.n
+        m = self.m
 
-        def _dual(theta):
-            lam, nu_lb, nu_ub = theta[:m], np.exp(theta[m : n + m]), np.exp(theta[n + m :])
-            z = np.exp((self.problem.S @ lam - nu_ub + nu_lb) / kx - 1)
-            obj_ = kx @ z - lam @ mu - nu_lb @ self.z_lb + nu_ub @ self.z_ub
-            jac_ = np.hstack([z @ self.problem.S - mu, (z - self.z_lb) * nu_lb, (self.z_ub - z) * nu_ub])
+        def _dual(lam):
+            z = np.exp((self.problem.S @ lam) / kx - 1)
+            obj_ = kx @ z - lam @ mu
+            jac_ = z @ self.problem.S - mu
             return obj_, jac_
 
-        theta_start = np.random.uniform(-50, -20, size=2 * n + m) if cube.theta_start is None else cube.theta_start
+        lam_start = np.random.uniform(*SAMPLE_RANGE, size=m) if cube.lam_start is None else cube.lam_start
 
         min_problem = None
         for _ in range(tries):
-            min_problem = minimize(_dual, theta_start, jac=True)
+            min_problem = minimize(_dual, lam_start, jac=True, tol=TOL)
             if min_problem.success:
-                theta = min_problem.x
-                lam, nu_lb, nu_ub = theta[:m], np.exp(theta[m : n + m]), np.exp(theta[n + m :])
-                cube.z_opt = np.exp((self.problem.S @ lam - nu_ub + nu_lb) / kx - 1)
+                lam = min_problem.x
+                cube.z_opt = np.exp((self.problem.S @ lam) / kx - 1)
                 return min_problem
-            theta_start = np.random.uniform(-50, -20, size=2 * n + m)
+            lam_start = np.random.uniform(*SAMPLE_RANGE, size=m)
 
-        raise Exception(
+        raise ValueError(
             f"Dual optimization failed at cube.center {1 / (1 + mu)} "
             f"and cube.radius {cube.radius}, opt: \n{min_problem}, x_lb: {self.problem.x_lb}."
         )
@@ -170,12 +186,10 @@ class FMLSolver(BranchAndBound):
             options={"glpk": {"msg_lev": "GLP_MSG_OFF"}},
         )
 
-    def _dual_dx_norm_ub(self, theta, x, r):
+    def _dual_dx_norm_ub(self, lam, x, r):
         """Compute L(x,r) defined in the accompanying paper. """
-        n, m = self.n, self.m
-        lam, nu_lb, nu_ub = theta[:m], np.exp(theta[m : n + m]), np.exp(theta[m + n :])
 
-        log_z = (self.problem.S @ lam - nu_ub + nu_lb) / (self.k @ (x + r)) - 1
+        log_z = (self.problem.S @ lam) / (self.k @ np.minimum(self.problem.x_ub, x + r)) - 1
         lhs = (
             np.divide(
                 lam,
@@ -185,11 +199,10 @@ class FMLSolver(BranchAndBound):
                     np.square(np.minimum(self.problem.x_ub, x + r)),
                 ),
             )
-            - self.problem.w
-            * ((np.exp(log_z) * log_z / self.problem.b) @ self.problem.S)
+            - self.problem.w * ((np.exp(log_z) * log_z / self.problem.b) @ self.problem.S)
         )
 
-        log_z = (self.problem.S @ lam - nu_ub + nu_lb) / (self.k @ (x - r)) - 1
+        log_z = (self.problem.S @ lam) / (self.k @ np.maximum(self.problem.x_lb, x - r)) - 1
         rhs = (
             np.divide(
                 -lam,
@@ -199,8 +212,7 @@ class FMLSolver(BranchAndBound):
                     np.square(np.maximum(self.problem.x_lb, x - r)),
                 ),
             )
-            + self.problem.w
-            * ((np.exp(log_z) * log_z / self.problem.b) @ self.problem.S)
+            + self.problem.w * ((np.exp(log_z) * log_z / self.problem.b) @ self.problem.S)
         )
 
         return np.max(np.hstack((lhs, rhs)))

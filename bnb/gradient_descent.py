@@ -22,9 +22,4 @@ class GradientDescent(OptimizationProblem):
         return max_
 
     def objective_function(self, p):
-        return np.sum(
-            [
-                segment.w * np.sum(p * segment.purchase_probabilities(p))
-                for segment in self.segments
-            ]
-        )
+        return np.sum([segment.w * np.sum(p * segment.purchase_probabilities(p)) for segment in self.segments])
