@@ -19,9 +19,8 @@ A_RANGE = (-7.0, 7.0)
 B_RANGE = (0.001, 0.01)
 N_RANGE = [10, 20, 30, 40, 50]
 M_RANGE = [1, 2, 3, 4]
-# N_RANGE = [20]
-# M_RANGE = [4]
 REPS = 20
+SEED = 1
 OUTPUT_PATH = Path("sim_results", datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv")
 MULTIPROCESS = True
 
@@ -29,7 +28,7 @@ MULTIPROCESS = True
 def simulate():
     logger = logging.getLogger(__name__)
 
-    seed = 0
+    seed = SEED
     t0 = time()
     _make_new_file()
 
@@ -71,20 +70,7 @@ def _make_new_file():
 
     with open(OUTPUT_PATH, "w", newline="") as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=",")
-        csvwriter.writerow(
-            [
-                "n",
-                "m",
-                "seed",
-                "cputime",
-                "iterations",
-                "solver",
-                "par",
-                "lb",
-                "ub",
-                "gd_sol",
-            ]
-        )
+        csvwriter.writerow(["n", "m", "seed", "cputime", "iterations", "solver", "par", "lb", "ub", "gd_sol"])
 
 
 def _write_new_line(solver, seed, gd_sol):

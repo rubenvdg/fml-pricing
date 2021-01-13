@@ -12,8 +12,7 @@ from autograd import numpy as anp
 
 solvers.options["show_progress"] = False
 
-# CNST = 1e6  # for normalization of optimization problem
-TOL = 1e-4  # relative tolerance for optimization algorithms
+TOL = 1e-1  # relative tolerance for optimization algorithms
 SAMPLE_RANGE = (-50, -20)  # for sampling starting values of the dual optimization problem
 
 
@@ -57,7 +56,11 @@ class FMLSolver(BranchAndBound):
         x_delta, r_delta = self._get_x_r_delta(cube)
 
         # Compute bounds
-        lipschitz_bound = self.compute_lipschitz_upper_bound(cube, x_delta, r_delta)
+        try:
+            lipschitz_bound = self.compute_lipschitz_upper_bound(cube, x_delta, r_delta)
+        except ValueError:
+            cube.objective_lb = 0.0
+            return np.inf
         alternative_bound = self.compute_alternative_bound(cube, x_delta, r_delta)
         return np.min([lipschitz_bound, alternative_bound])
 
@@ -103,7 +106,6 @@ class FMLSolver(BranchAndBound):
             )
 
         cnstrs = [{"type": "ineq", "fun": cnstr}]
-        # xi_start = np.outer(cube.z_opt, x)
         xi_start = lb
         cnst = np.linalg.norm(jac(xi_start, 1.0))  # for scaling the optimization problem
 
