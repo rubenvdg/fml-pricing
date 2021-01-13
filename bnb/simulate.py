@@ -15,16 +15,24 @@ from bnb.gradient_descent import GradientDescent
 from bnb.problem import OptimizationProblem
 
 EPS = 0.01
+A_RANGE = (-7.0, 7.0)
+B_RANGE = (0.001, 0.01)
+N_RANGE = [10, 20, 30, 40, 50]
+M_RANGE = [1, 2, 3, 4]
+REPS = 20
+SEED = 1
+OUTPUT_PATH = Path("sim_results", datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv")
+MULTIPROCESS = True
 
 
-def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, multiprocess=True):
+def simulate():
     logger = logging.getLogger(__name__)
 
-    seed = 0
+    seed = SEED
     t0 = time()
-    _make_new_file(output_path)
+    _make_new_file()
 
-    for _, m, n in tqdm(list(product(range(reps), m_range, n_range))):
+    for _, m, n in tqdm(list(product(range(REPS), M_RANGE, N_RANGE))):
 
         seed += 1
 
@@ -34,8 +42,8 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
         np.random.seed(seed)
         w = np.random.uniform(0, 1, size=m)
         w /= np.sum(w)
-        a = [np.random.uniform(*a_range, size=n) for _ in range(m)]
-        b = np.random.uniform(*b_range, size=n)
+        a = [np.random.uniform(*A_RANGE, size=n) for _ in range(m)]
+        b = np.random.uniform(*B_RANGE, size=n)
         problem = OptimizationProblem(a, b, w)
 
         # solve with gradient descent
@@ -44,7 +52,7 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
         logger.info("gradient descent solution: %s", gd_sol)
 
         # solve with our solver
-        solver = Solver(problem, objective_lb=gd_sol, multiprocess=multiprocess, epsilon=EPS)
+        solver = FMLSolver(problem, objective_lb=gd_sol, multiprocess=MULTIPROCESS, epsilon=EPS)
         solver.solve()
         logger.info("time elapsed: %s", solver.timer)
 
@@ -52,35 +60,22 @@ def simulate(output_path, reps, Solver, a_range, b_range, n_range, m_range, mult
             raise ValueError("Suboptimal solution.")
 
         # persist results
-        _write_new_line(output_path, solver, seed, gd_sol)
+        _write_new_line(solver, seed, gd_sol)
 
-    copyfile(output_path, output_path.parent.joinpath("_lastrun.csv"))
+    copyfile(OUTPUT_PATH, OUTPUT_PATH.parent.joinpath("_lastrun.csv"))
     logger.info("total time elapsed: %s", time() - t0)
 
 
-def _make_new_file(output_path):
+def _make_new_file():
 
-    with open(output_path, "w", newline="") as csvfile:
+    with open(OUTPUT_PATH, "w", newline="") as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=",")
-        csvwriter.writerow(
-            [
-                "n",
-                "m",
-                "seed",
-                "cputime",
-                "iterations",
-                "solver",
-                "par",
-                "lb",
-                "ub",
-                "gd_sol",
-            ]
-        )
+        csvwriter.writerow(["n", "m", "seed", "cputime", "iterations", "solver", "par", "lb", "ub", "gd_sol"])
 
 
-def _write_new_line(output_path, solver, seed, gd_sol):
+def _write_new_line(solver, seed, gd_sol):
     par = {"a": list(map(list, solver.problem.A)), "b": solver.problem.b.tolist(), "w": solver.problem.w.tolist()}
-    with open(output_path, "a", newline="") as csvfile:
+    with open(OUTPUT_PATH, "a", newline="") as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=",", quotechar="'")
         csvwriter.writerow(
             [
@@ -101,16 +96,4 @@ def _write_new_line(output_path, solver, seed, gd_sol):
 if __name__ == "__main__":
 
     logging.basicConfig(format="%(asctime)s %(message)s", level=logging.INFO)
-
-    a_range = (0.0, 7.0)
-    b_range = (0.001, 0.01)
-    # n_range = [10, 20, 30, 40, 50]
-    # m_range = [1, 2, 3, 4]
-    n_range = [30]
-    m_range = [3]
-    reps = 5
-
-    file_name = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv"
-    output_path = Path("sim_results", file_name)
-
-    simulate(output_path, reps, FMLSolver, a_range, b_range, n_range, m_range)
+    simulate()
