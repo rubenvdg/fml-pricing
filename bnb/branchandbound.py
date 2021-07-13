@@ -54,7 +54,6 @@ class BranchAndBound:
         return 1 - self.objective_lb / self.objective_ub
 
     def converged(self):
-        print(f"LB: {self.objective_lb}, UB: {self.objective_ub}.")
         if self.opt_gap() < self.epsilon:
             self.exit_msg = f"Opt_gap = {self.opt_gap()} (< epsilon)."
             return True
@@ -100,4 +99,3 @@ class BranchAndBound:
             for cube in self.cubes
             if cube.branch
         ]
-        print("number of cubes: ", len(self.cubes))
