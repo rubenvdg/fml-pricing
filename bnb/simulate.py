@@ -19,7 +19,7 @@ A_RANGE = (-7.0, 7.0)
 B_RANGE = (0.001, 0.01)
 N_RANGE = [10, 20, 30, 40, 50]
 M_RANGE = [1, 2, 3, 4]
-REPS = 20
+REPS = 5
 SEED = 1
 OUTPUT_PATH = Path("sim_results", datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S") + ".csv")
 MULTIPROCESS = True
@@ -49,7 +49,6 @@ def simulate():
         # solve with gradient descent
         gd = GradientDescent(a, b, w)
         gd_sol = gd.solve()
-        logger.info("gradient descent solution: %s", gd_sol)
 
         # solve with our solver
         solver = FMLSolver(problem, objective_lb=gd_sol, multiprocess=MULTIPROCESS, epsilon=EPS)
