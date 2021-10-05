@@ -49,7 +49,6 @@ def simulate():
         # solve with gradient descent
         gd = GradientDescent(a, b, w)
         gd_sol = gd.solve()
-        logger.info("gradient descent solution: %s", gd_sol)
 
         # solve with our solver
         solver = FMLSolver(problem, objective_lb=gd_sol, multiprocess=MULTIPROCESS, epsilon=EPS)

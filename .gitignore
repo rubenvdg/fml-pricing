@@ -4,6 +4,7 @@
 *.xlsx
 *.xls
 notebooks_private/
+private/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
